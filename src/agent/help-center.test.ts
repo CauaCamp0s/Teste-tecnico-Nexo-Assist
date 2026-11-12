@@ -1,0 +1,313 @@
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PrismaClient } from "@prisma/client";
+import { MastraLanguageModelV2Mock } from "@mastra/core/test-utils/llm-mock";
+import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { seedDatabase } from "../../prisma/seed-data";
+import type { DecisionRecord } from "./decisions";
+
+let directory: string;
+let db: PrismaClient;
+let employeeId: string;
+let conversationId: string;
+let respond: (typeof import("./help-center"))["respondToConversation"];
+let search: typeof import("@/services/help-center");
+
+const assessment = {
+  understanding: { intent: "ti", summary: "Consulta sobre VPN" },
+  confidence: "alta",
+  reason: "O artigo descreve o erro informado.",
+};
+const usage = { inputTokens: 10, outputTokens: 10, totalTokens: 20 };
+
+function text(object: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(object) }],
+    finishReason: "stop" as const,
+    usage,
+    warnings: [],
+  };
+}
+
+function tool(query: string) {
+  return {
+    content: [
+      {
+        type: "tool-call" as const,
+        toolCallId: "search-1",
+        toolName: "search_help_center",
+        input: JSON.stringify({ query }),
+      },
+    ],
+    finishReason: "tool-calls" as const,
+    usage,
+    warnings: [],
+  };
+}
+
+function modelFor(query: string, confidence = "alta") {
+  return new MastraLanguageModelV2Mock({
+    doGenerate: [
+      text(assessment),
+      tool(query),
+      text({
+        ...assessment,
+        confidence,
+        answer:
+          "Consulte o portal de softwares para reinstalar a VPN no Windows 10.",
+        consultations: [{ tool: "invented" }],
+        executedActions: ["criou chamado"],
+        decision: "criou_chamado",
+      }),
+    ],
+  });
+}
+
+beforeAll(async () => {
+  directory = await mkdtemp(join(tmpdir(), "nexo-agent-test-"));
+  const databaseUrl = `file:${join(directory, "test.db").replaceAll("\\", "/")}`;
+  execFileSync(
+    process.execPath,
+    ["node_modules/prisma/build/index.js", "migrate", "deploy"],
+    {
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      stdio: "pipe",
+    },
+  );
+  db = new PrismaClient({ datasourceUrl: databaseUrl });
+  await seedDatabase(db);
+  employeeId = (
+    await db.user.findUniqueOrThrow({
+      where: { email: "ana.souza@nexo.com.br" },
+    })
+  ).id;
+  vi.doMock("@/lib/db", () => ({ db }));
+  respond = (await import("./help-center")).respondToConversation;
+  search = await import("@/services/help-center");
+}, 30_000);
+
+beforeEach(async () => {
+  await db.message.deleteMany();
+  await db.conversation.deleteMany();
+  const conversation = await db.conversation.create({
+    data: {
+      employeeId,
+      messages: {
+        create: {
+          role: "EMPLOYEE",
+          authorId: employeeId,
+          content: "VPN com erro 809 no Windows 10",
+        },
+      },
+    },
+  });
+  conversationId = conversation.id;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => {
+      throw new Error("Rede proibida nos testes do agent.");
+    }),
+  );
+});
+
+afterAll(async () => {
+  vi.unstubAllGlobals();
+  await db?.$disconnect();
+  vi.doUnmock("@/lib/db");
+  if (directory) await rm(directory, { recursive: true, force: true });
+});
+
+test("executa a ferramenta real e persiste apenas consultas e ações observadas pelo código", async () => {
+  const model = modelFor("VPN erro 809");
+  const message = await respond(employeeId, conversationId, model);
+  const record = message.decisionRecord as unknown as DecisionRecord;
+  expect(record.consultations).toHaveLength(1);
+  expect(record.consultations[0]).toMatchObject({
+    tool: "search_help_center",
+    input: { query: "VPN erro 809" },
+    result: { status: "success" },
+  });
+  expect(record.consultations[0].result.summary).toContain("VPN com erro 809");
+  expect(record.executedActions).toEqual([
+    {
+      tool: "search_help_center",
+      description: "Consultou a central de ajuda.",
+    },
+  ]);
+  expect(record.decision).toBe("orientar_com_artigos");
+  expect(record.confidence).toBe("alta");
+  expect(JSON.stringify(record)).not.toContain("invented");
+  expect(JSON.stringify(record)).not.toContain("criou chamado");
+  expect(model.doGenerateCalls).toHaveLength(3);
+  expect(fetch).not.toHaveBeenCalled();
+  await db.$disconnect();
+  const saved = await db.message.findFirstOrThrow({
+    where: { id: message.id, conversation: { employeeId } },
+  });
+  expect(saved.decisionRecord).toEqual(record);
+});
+
+test.each(["alta", "média", "baixa"])(
+  "busca vazia nunca permite segurança alta: modelo declarou %s",
+  async (confidence) => {
+    const message = await respond(
+      employeeId,
+      conversationId,
+      modelFor("zqxw inexistente", confidence),
+    );
+    const record = message.decisionRecord as unknown as DecisionRecord;
+    expect(record.consultations[0].result.articleIds).toEqual([]);
+    expect(record.confidence).toBe(
+      confidence === "alta" ? "média" : confidence,
+    );
+    expect(record.decision).toBe("pedir_detalhes");
+    expect(message.content).toContain("Não tenho informações suficientes");
+    if (confidence === "alta")
+      expect(record.appliedRules).toContain(
+        "Sem artigo relevante consultado, a segurança é limitada a média.",
+      );
+  },
+);
+
+test.each(["rh", "financeiro", "facilities"])(
+  "redireciona %s sem oferecer ou executar ferramentas",
+  async (intent) => {
+    const searchSpy = vi.spyOn(search, "searchHelpCenter");
+    const model = new MastraLanguageModelV2Mock({
+      doGenerate: text({
+        ...assessment,
+        understanding: { intent, summary: "Solicitação fora de TI" },
+      }),
+    });
+    const message = await respond(employeeId, conversationId, model);
+    const record = message.decisionRecord as unknown as DecisionRecord;
+    expect(record.decision).toBe("redirecionar");
+    expect(record.consultations).toEqual([]);
+    expect(record.executedActions).toEqual([]);
+    expect(searchSpy).not.toHaveBeenCalled();
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(model.doGenerateCalls[0].tools ?? []).toEqual([]);
+    expect(message.content).toContain("Esse assunto deve ser tratado");
+  },
+);
+
+test("usa o histórico persistido explicitamente e não inclui outras conversas", async () => {
+  await db.message.create({
+    data: {
+      conversationId,
+      role: "EMPLOYEE",
+      authorId: employeeId,
+      content: "Já tentei reiniciar o computador.",
+    },
+  });
+  await db.conversation.create({
+    data: {
+      employeeId,
+      messages: {
+        create: { role: "EMPLOYEE", content: "Informação de outra conversa" },
+      },
+    },
+  });
+  const model = modelFor("VPN erro 809");
+  await respond(employeeId, conversationId, model);
+  const prompt = JSON.stringify(model.doGenerateCalls[0].prompt);
+  expect(prompt).toContain("VPN com erro 809 no Windows 10");
+  expect(prompt).toContain("Já tentei reiniciar o computador.");
+  expect(prompt).not.toContain("Informação de outra conversa");
+});
+
+test("não inventa consulta quando o modelo deixa de chamar a ferramenta", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: [
+      text(assessment),
+      text({ ...assessment, answer: "Consultei tudo e resolvi." }),
+    ],
+  });
+  const message = await respond(employeeId, conversationId, model);
+  const record = message.decisionRecord as unknown as DecisionRecord;
+  expect(record.consultations).toEqual([]);
+  expect(record.executedActions).toEqual([]);
+  expect(record.confidence).toBe("média");
+  expect(message.content).not.toContain("resolvi");
+});
+
+test("registra falha da ferramenta sem anunciar execução bem-sucedida", async () => {
+  vi.spyOn(search, "searchHelpCenter").mockRejectedValueOnce(
+    new Error("Banco indisponível"),
+  );
+  const message = await respond(
+    employeeId,
+    conversationId,
+    modelFor("VPN erro 809"),
+  );
+  const record = message.decisionRecord as unknown as DecisionRecord;
+  expect(record.consultations[0].result.status).toBe("error");
+  expect(record.executedActions).toEqual([]);
+  expect(record.confidence).not.toBe("alta");
+});
+
+test("não executa o modelo para conversa de outro funcionário ou pausada", async () => {
+  const model = modelFor("VPN erro 809");
+  await expect(
+    respond("outro-funcionario", conversationId, model),
+  ).rejects.toThrow("Conversa não encontrada.");
+  await db.conversation.updateMany({
+    where: { id: conversationId, employeeId },
+    data: { status: "ANALYST" },
+  });
+  await expect(respond(employeeId, conversationId, model)).rejects.toThrow(
+    "O agent não está atendendo",
+  );
+  expect(model.doGenerateCalls).toHaveLength(0);
+});
+
+test("pede esclarecimento sem buscar quando a intenção é indefinida", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: text({
+      ...assessment,
+      understanding: { intent: "indefinido", summary: "Pedido sem detalhes" },
+      confidence: "baixa",
+    }),
+  });
+  const message = await respond(employeeId, conversationId, model);
+  const record = message.decisionRecord as unknown as DecisionRecord;
+  expect(record.decision).toBe("pedir_detalhes");
+  expect(record.confidence).toBe("baixa");
+  expect(record.consultations).toEqual([]);
+  expect(model.doGenerateCalls).toHaveLength(1);
+});
+
+test("não persiste resposta se o analista assumir durante a geração", async () => {
+  let step = 0;
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      step += 1;
+      if (step === 1) return text(assessment);
+      if (step === 2) return tool("VPN erro 809");
+      await db.conversation.updateMany({
+        where: { id: conversationId, employeeId },
+        data: { status: "ANALYST" },
+      });
+      return text({
+        ...assessment,
+        answer: "Resposta que não deve ser enviada.",
+      });
+    },
+  });
+  await expect(respond(employeeId, conversationId, model)).rejects.toThrow(
+    "A conversa não está mais com o agent.",
+  );
+  expect(
+    await db.message.count({ where: { conversationId, role: "AGENT" } }),
+  ).toBe(0);
+});
+
+test("a busca ignora consultas genéricas e encontra títulos com acentos", async () => {
+  expect(
+    await search.searchHelpCenter("preciso de ajuda com meu problema"),
+  ).toEqual([]);
+  const articles = await search.searchHelpCenter("horario service desk");
+  expect(articles[0].title).toBe("Horário do service desk");
+});

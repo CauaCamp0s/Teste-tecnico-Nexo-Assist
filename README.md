@@ -4,7 +4,7 @@ Agente de atendimento para o service desk de TI da Nexo.
 
 ## Desenvolvimento local
 
-Requisitos: Node.js >=22.12 e npm.
+Requisitos: Node.js >=22.13 e npm.
 
 Copie `.env.example` para `.env` e execute:
 
@@ -19,6 +19,8 @@ O SQLite local será criado em `prisma/dev.db`. Acesse http://localhost:3000.
 O seed adiciona três funcionários, um analista e seis artigos, sem duplicar registros nem sobrescrever dados existentes. Os e-mails de exemplo estão em `prisma/seed-data.ts`.
 
 Para entrar, use `ana.souza@nexo.com.br` (funcionária) ou `rafael.lima@nexo.com.br` (analista) com qualquer senha não vazia, conforme o login de demonstração do desafio.
+
+O agent usa Mastra e OpenAI (`LLM_MODEL`), com modo Fast e esforço `low`. Preencha `OPENAI_API_KEY` somente no `.env` para chamadas reais. Os testes usam modelo mockado. O histórico vem do SQLite; o registro de decisões fica em JSON junto à mensagem, sem memória do Mastra.
 
 ## Verificações
 

@@ -78,6 +78,7 @@ model Message {
   authorId       String?
   author         User?        @relation(fields: [authorId], references: [id], onDelete: Restrict)
   content        String
+  decisionRecord Json?
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt, id])
