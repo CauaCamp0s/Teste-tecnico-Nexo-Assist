@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Correção: falha técnica do modelo (timeout, resposta inválida, 429/503 esgotado) mantém a conversa em AGENT com `modelFailure` e nova tentativa sobre a mesma mensagem, sem consumir o limite de 30. Segurança baixa só encaminha quando uma resposta válida identifica um problema de TI; saudações e intenção indefinida pedem contexto.
+
 O fluxo normal continua com até duas gerações; há reserva de 2 s do orçamento total de 20 s para persistência/backoff (geração limitada a 18 s). Recuperação de JSON e o único retry de 429/503 continuam excepcionais e dentro do mesmo orçamento. Alegações de escrita detectadas no texto livre são substituídas; as confirmações e encaminhamentos exibidos são redigidos pelo código após persistência. Não se transfere automaticamente o último item de uma lista ambígua. Uma referência resolvida fora da janela de reabertura pede autorização para preparar um novo chamado em vez de criar silenciosamente.
 
 Cada resposta mostra atividades observadas e um detalhe expansível com entendimento, fonte e resultado das consultas, decisão, ações realmente persistidas, regras (incluindo prioridade e SLA), segurança e motivo. O detalhe usa rótulos legíveis e listas, não JSON cru. Consultas não são apresentadas como alterações de estado, e falhas não recebem marca de execução bem-sucedida.

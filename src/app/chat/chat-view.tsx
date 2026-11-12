@@ -62,7 +62,12 @@ export function ChatView({
     };
   }, [conversationId, paused]);
   const last = messages.at(-1);
-  const pendingMessage = last?.role === "EMPLOYEE" ? last : null;
+  const pendingMessage =
+    last?.role === "EMPLOYEE"
+      ? last
+      : last?.decisionRecord?.modelFailure
+        ? (messages.findLast((message) => message.role === "EMPLOYEE") ?? null)
+        : null;
 
   useEffect(() => {
     end.current?.scrollIntoView({
@@ -278,7 +283,7 @@ export function ChatView({
             <div className={styles.pending}>
               Sua mensagem está salva e ainda não tem resposta.
               <button type="button" onClick={retryPending}>
-                Obter resposta
+                Tentar novamente
               </button>
             </div>
           )}

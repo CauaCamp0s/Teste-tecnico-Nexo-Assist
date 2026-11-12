@@ -11,6 +11,7 @@ import {
   buildDecisionRecord,
   type Consultation,
   type ModelRetry,
+  type DecisionRecord,
 } from "./decisions";
 import { createModelRetry } from "./model-retry";
 import { ticketService, ticketFactory } from "@/services/tickets";
@@ -54,13 +55,22 @@ export async function respondToConversation(
   if (!conversation) throw new Error("Conversa não encontrada.");
   if (conversation.status !== "AGENT")
     throw new Error("O agent não está atendendo esta conversa.");
-  if (conversation.messages.at(-1)?.role !== "EMPLOYEE")
+  const lastMessage = conversation.messages.at(-1);
+  const retryingFailure =
+    lastMessage?.role === "AGENT" &&
+    !!(lastMessage.decisionRecord as DecisionRecord | null)?.modelFailure;
+  if (lastMessage?.role !== "EMPLOYEE" && !retryingFailure)
     throw new Error("Não há mensagem do funcionário para responder.");
 
-  const history: CoreMessage[] = conversation.messages.map((message) => ({
-    role: message.role === "EMPLOYEE" ? "user" : "assistant",
-    content: message.content,
-  }));
+  const history: CoreMessage[] = conversation.messages
+    .filter(
+      (message) =>
+        !(message.decisionRecord as DecisionRecord | null)?.modelFailure,
+    )
+    .map((message) => ({
+      role: message.role === "EMPLOYEE" ? "user" : "assistant",
+      content: message.content,
+    }));
   const consultations: Consultation[] = [];
   const searchResults: unknown[] = [];
   const draftFlow = createDraftFlow(
@@ -232,7 +242,7 @@ export async function respondToConversation(
         : "Não foi possível obter uma resposta válida do provedor do modelo.";
     assessment = { ...assessment, confidence: "baixa", reason: failureReason };
     content =
-      "Não consegui elaborar uma orientação segura agora. Pode detalhar sua dúvida ou problema de TI?";
+      "Não foi possível responder agora por uma falha técnica do modelo. Sua mensagem está salva. Use Tentar novamente para continuar.";
   }
 
   const decisionRecord = buildDecisionRecord(assessment, consultations);
@@ -244,9 +254,9 @@ export async function respondToConversation(
       : failureReason.includes("duas tentativas")
         ? "invalid_response"
         : "unavailable";
-    decisionRecord.decision = "pedir_detalhes";
+    decisionRecord.decision = "indisponivel";
     decisionRecord.appliedRules.push(
-      "Falha do modelo: segurança baixa exige avaliação humana.",
+      "Falha técnica do modelo não é insegurança de decisão: manter AGENT e permitir nova tentativa.",
     );
   } else if (
     decisionRecord.decision === "pedir_detalhes" &&
@@ -285,8 +295,12 @@ export async function respondToConversation(
     assessment.understanding.intent,
   );
   const shouldTransfer =
+    !failureReason &&
     !outsideScope &&
-    (handoff?.requested || critical || decisionRecord.confidence === "baixa");
+    (handoff?.requested ||
+      critical ||
+      (assessment.understanding.intent === "ti" &&
+        decisionRecord.confidence === "baixa"));
   if (shouldTransfer) {
     decisionRecord.reason = handoff?.requested
       ? "Funcionário solicitou atendimento humano (incluindo aceite da oferta por atraso)."

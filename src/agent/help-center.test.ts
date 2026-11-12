@@ -275,7 +275,7 @@ test("não executa o modelo para conversa de outro funcionário ou pausada", asy
   expect(model.doGenerateCalls).toHaveLength(0);
 });
 
-test("encaminha sem buscar quando o modelo não tem segurança", async () => {
+test("mensagem indefinida com segurança baixa não transfere", async () => {
   const model = new MastraLanguageModelV2Mock({
     doGenerate: text({
       ...assessment,
@@ -285,7 +285,7 @@ test("encaminha sem buscar quando o modelo não tem segurança", async () => {
   });
   const message = await respond(employeeId, conversationId, model);
   const record = message.decisionRecord as unknown as DecisionRecord;
-  expect(record.decision).toBe("transferir");
+  expect(record.decision).toBe("pedir_detalhes");
   expect(record.confidence).toBe("baixa");
   expect(record.consultations).toEqual([]);
   expect(model.doGenerateCalls).toHaveLength(1);
@@ -359,15 +359,20 @@ test.each(["json", "schema"])(
     const record = message.decisionRecord as unknown as DecisionRecord;
     expect(model.doGenerateCalls).toHaveLength(3);
     expect(record).toMatchObject({
-      decision: "transferir",
+      decision: "indisponivel",
       confidence: "baixa",
-      executedActions: [
-        "Encaminhou a conversa para a fila de analistas e pausou o agent.",
-      ],
+      executedActions: [],
     });
     expect(record.reason).toContain("duas tentativas");
     expect(record.consultations).toHaveLength(1);
-    expect(message.content).toContain("Encaminhei");
+    expect(message.content).toContain("Tentar novamente");
+    expect(
+      (
+        await db.conversation.findUniqueOrThrow({
+          where: { id: conversationId },
+        })
+      ).status,
+    ).toBe("AGENT");
     expect(
       (await db.message.findUniqueOrThrow({ where: { id: message.id } }))
         .decisionRecord,
@@ -406,7 +411,7 @@ test("falha de transporte não dispara retry e persiste segurança baixa", async
   expect(model.doGenerateCalls).toHaveLength(1);
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
-    decision: "transferir",
+    decision: "indisponivel",
     consultations: [],
   });
 });
@@ -418,7 +423,7 @@ test("resposta direta inválida tenta novamente sem consultar artigos", async ()
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
     consultations: [],
-    decision: "transferir",
+    decision: "indisponivel",
   });
 });
 
@@ -550,6 +555,21 @@ test("registra retry esgotado e persiste a resposta de contingência", async () 
     confidence: "baixa",
     modelRetries: [{ statusCode: 503, outcome: "failed" }],
   });
+  expect(
+    (await db.conversation.findUniqueOrThrow({ where: { id: conversationId } }))
+      .status,
+  ).toBe("AGENT");
+  const recovered = await respond(
+    employeeId,
+    conversationId,
+    modelFor("VPN erro 809"),
+  );
+  expect(
+    (recovered.decisionRecord as unknown as DecisionRecord).modelFailure,
+  ).toBeUndefined();
+  expect(
+    await db.message.count({ where: { conversationId, role: "EMPLOYEE" } }),
+  ).toBe(1);
 });
 
 test.each([400, 401, 403, 500])("não repete HTTP %s", async (statusCode) => {

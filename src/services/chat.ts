@@ -51,13 +51,23 @@ export async function generateChatReply(
     throw new Error("Esta conversa não está disponível para o assistente.");
   }
   const last = conversation.messages.at(-1);
+  const latestEmployee = conversation.messages.findLast(
+    (message) => message.role === "EMPLOYEE",
+  );
+  const failed =
+    last?.role === "AGENT" &&
+    !!(last.decisionRecord as DecisionRecord | null)?.modelFailure;
   if (
     last?.role === "AGENT" &&
-    conversation.messages.at(-2)?.id === employeeMessageId
+    latestEmployee?.id === employeeMessageId &&
+    !failed
   ) {
     return serializeChatMessage(last);
   }
-  if (last?.role !== "EMPLOYEE" || last.id !== employeeMessageId) {
+  if (
+    latestEmployee?.id !== employeeMessageId ||
+    (last?.role !== "EMPLOYEE" && !failed)
+  ) {
     throw new Error("A conversa foi atualizada. Recarregue para continuar.");
   }
   return serializeChatMessage(
