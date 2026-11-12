@@ -32,6 +32,19 @@ const outcomes = {
   aborted: "Interrompida pelo limite de espera",
 };
 
+const toolLabels = {
+  search_help_center: "Central de ajuda",
+  list_tickets: "Seus chamados",
+  get_ticket: "Chamado selecionado",
+  find_duplicate_candidates: "Candidatos a duplicidade",
+};
+const activityLabels = {
+  search_help_center: "buscou na central de ajuda",
+  list_tickets: "consultou seus chamados",
+  get_ticket: "consultou o chamado",
+  find_duplicate_candidates: "verificou duplicidade",
+};
+
 export function ActivityLine({ record }: { record: DecisionRecord | null }) {
   return (
     <div className={styles.activity}>
@@ -42,9 +55,19 @@ export function ActivityLine({ record }: { record: DecisionRecord | null }) {
             {consultation.result.status === "success" ? "✓" : "!"}
           </span>{" "}
           {consultation.result.status === "success"
-            ? "buscou na central de ajuda"
-            : "falha ao consultar a central de ajuda"}
+            ? activityLabels[consultation.tool]
+            : `falha na consulta: ${toolLabels[consultation.tool]}`}
+          {consultation.input.number ? ` ${consultation.input.number}` : ""}
         </span>
+      ))}
+      {record?.appliedRules.some((rule) => rule.startsWith("Prioridade ")) && (
+        <span>✓ classificou a prioridade</span>
+      )}
+      {record?.appliedRules.some((rule) => /SLA|Prazo|prazo/.test(rule)) && (
+        <span>✓ calculou o prazo</span>
+      )}
+      {record?.executedActions.map((action) => (
+        <span key={action}>✓ {action}</span>
       ))}
       {!!record?.modelRetries?.length && (
         <span>↻ nova tentativa do modelo</span>
@@ -76,8 +99,15 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
               <ul>
                 {record.consultations.map((consultation, index) => (
                   <li key={index}>
-                    <strong>Central de ajuda</strong> · “
-                    {consultation.input.query}”
+                    <strong>{toolLabels[consultation.tool]}</strong>
+                    {(consultation.input.query ||
+                      consultation.input.number) && (
+                      <>
+                        {" "}
+                        · “
+                        {consultation.input.query || consultation.input.number}”
+                      </>
+                    )}
                     <p>
                       {consultation.result.status === "error"
                         ? "Consulta não concluída. "
@@ -100,7 +130,17 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
           <dt>Decisão</dt>
           <dd>{decisions[record.decision]}</dd>
           <dt>Ações executadas</dt>
-          <dd>Nenhuma ação de alteração de estado. Buscas são consultas.</dd>
+          <dd>
+            {record.executedActions.length ? (
+              <ul>
+                {record.executedActions.map((action, index) => (
+                  <li key={index}>{action}</li>
+                ))}
+              </ul>
+            ) : (
+              "Nenhuma ação de alteração de estado. Buscas são consultas."
+            )}
+          </dd>
           <dt>Segurança</dt>
           <dd>{record.confidence}</dd>
           <dt>Motivo</dt>

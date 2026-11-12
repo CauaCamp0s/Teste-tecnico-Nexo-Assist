@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Cada resposta mostra atividades observadas e um detalhe expansível com entendimento, fonte e resultado das consultas, decisão, ações realmente persistidas, regras (incluindo prioridade e SLA), segurança e motivo. O detalhe usa rótulos legíveis e listas, não JSON cru. Consultas não são apresentadas como alterações de estado, e falhas não recebem marca de execução bem-sucedida.
+
 Transferências: pedido explícito/aceite, contexto crítico calculado pelo código e segurança baixa encaminham a conversa e pausam o agent. Escopo externo continua sendo redirecionado. O resumo é montado com relatos, consultas/decisões persistidas e chamado próprio identificado. Se o legado esgotar tentativas, sua transação é desfeita e a conversa ainda entra na fila com aviso explícito de que o chamado não foi transferido. Chamados resolvidos/encerrados não são alterados ao encaminhar a conversa. Não se inventam equipe N1/N2 nem prazo de contato humano.
 
 Confirmar/Cancelar são server actions sem geração de modelo. Alteração, ledger de idempotência, resultado no histórico e atualização dos cards são atômicos. Repetir o mesmo botão devolve a mesma mensagem de resultado. Indisponibilidade preserva PENDING e informa que a tentativa não foi confirmada; erros definitivos exigem revisão. Os botões determinísticos continuam disponíveis ao atingir 30 mensagens (não consomem nova mensagem do funcionário).
