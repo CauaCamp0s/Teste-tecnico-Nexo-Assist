@@ -4,6 +4,10 @@ const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
   saveChatMessage: vi.fn(),
   generateChatReply: vi.fn(),
+  allowAgentRequest: vi.fn(),
+}));
+vi.mock("@/lib/agent-rate-limit", () => ({
+  allowAgentRequest: mocks.allowAgentRequest,
 }));
 vi.mock("@/lib/session", () => ({ requireRole: mocks.requireRole }));
 vi.mock("@/services/chat", () => ({
@@ -14,7 +18,16 @@ import { requestReply, sendMessage } from "./actions";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.allowAgentRequest.mockResolvedValue(true);
   mocks.requireRole.mockResolvedValue({ id: "funcionario-da-sessao" });
+});
+
+test("limite bloqueia o modelo e preserva mensagem para nova tentativa", async () => {
+  mocks.allowAgentRequest.mockResolvedValue(false);
+  expect((await requestReply("conversa", "mensagem")).error).toContain(
+    "Muitas solicitações",
+  );
+  expect(mocks.generateChatReply).not.toHaveBeenCalled();
 });
 
 test("deriva o funcionário da sessão tanto no envio quanto na geração", async () => {

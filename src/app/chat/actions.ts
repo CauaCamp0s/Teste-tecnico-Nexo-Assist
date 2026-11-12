@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { createChatDraftService } from "@/services/chat-drafts";
 import { ticketFactory } from "@/services/tickets";
 import { db } from "@/lib/db";
+import { allowAgentRequest } from "@/lib/agent-rate-limit";
 
 export async function actOnDraft(
   conversationId: string,
@@ -68,6 +69,11 @@ export async function requestReply(
 ): Promise<ChatResult> {
   const user = await requireRole("EMPLOYEE");
   try {
+    if (!(await allowAgentRequest()))
+      return {
+        error:
+          "Muitas solicitações ao assistente. Aguarde um minuto e tente novamente. Sua mensagem está salva.",
+      };
     return {
       message: await generateChatReply(
         user.id,
