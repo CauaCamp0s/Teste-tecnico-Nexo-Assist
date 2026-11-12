@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Coleta: o modelo extrai dados do histórico; o código pergunta um campo ausente por vez e calcula prioridade com `classifyTicketPriority`. O modelo compara candidatos consultados; sem consulta anterior ou com correspondência incerta, o servidor pede seleção. Um problema correspondente ativo vira complemento; resolvido elegível vira oferta de reabertura no card. Revisar dados cancela o rascunho pendente anterior e cria outro atomicamente com a resposta. O prazo no rascunho é uma previsão, recalculada na confirmação, não promessa de atendimento antes de uma reunião.
+
 Consultas do agent usam ferramentas sem parâmetro de identidade: `employeeId` fica no closure criado pelo servidor. Cards e ofertas de transferência por vencimento são derivados das consultas reais pelo código. Seleções rápidas preenchem o compositor para envio explícito. Cards persistem como retrato da consulta (datas reais, sem prometer horários ilustrativos do protótipo); a seleção consulta novamente. O payload estruturado suporta opções, chamados e rascunhos.
 
 O serviço do analista permite à equipe listar e ler a fila; somente o responsável que assumiu pode responder, devolver ou encerrar. Assunção é transacional e registra `analystId`. As server actions exigem `requireRole("ANALYST")`; o serviço também valida o papel no banco. O painel obtém chamados pelo proprietário persistido na conversa, nunca por um id fornecido pelo cliente. Os eventos de controle ficam no histórico como mensagens de sistema. Nenhum prazo ilustrativo de N1/N2 do protótipo é prometido.

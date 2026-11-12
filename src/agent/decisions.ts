@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { proposalSchema } from "./proposal";
 
 export const assessmentSchema = z.object({
   understanding: z.object({
@@ -11,6 +12,7 @@ export const assessmentSchema = z.object({
 
 export const answerSchema = assessmentSchema.extend({
   answer: z.string().min(1),
+  proposal: proposalSchema.nullable().optional(),
 });
 
 export type Consultation = {

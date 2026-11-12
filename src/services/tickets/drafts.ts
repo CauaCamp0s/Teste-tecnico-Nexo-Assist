@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import type { TicketDatabase } from "./writes";
 import { z } from "zod";
 import { TicketError, TicketUnavailableError } from "./errors";
 import { createTicketService } from "./service";
@@ -34,8 +35,15 @@ async function readDraft(
   return draft;
 }
 
+function transact<T>(
+  database: TicketDatabase,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+) {
+  return "$transaction" in database ? database.$transaction(fn) : fn(database);
+}
+
 export function createDraftService(
-  database: PrismaClient,
+  database: TicketDatabase,
   clock: () => Date = () => new Date(),
   ticketFactory: (tx: Prisma.TransactionClient) => TicketService = (tx) =>
     createTicketService(tx, clock),
@@ -50,7 +58,7 @@ export function createDraftService(
           "Informe a operação, a conversa, o alvo quando necessário e o conteúdo completo do rascunho.",
         );
       const { conversationId, kind, targetNumber, content } = parsed.data;
-      return database.$transaction(async (tx) => {
+      return transact(database, async (tx) => {
         const conversation = await tx.conversation.findFirst({
           where: { id: conversationId, employeeId, status: "AGENT" },
         });
@@ -81,7 +89,7 @@ export function createDraftService(
     get: (employeeId: string, id: string) =>
       readDraft(database, employeeId, id),
     async cancel(employeeId: string, id: string) {
-      return database.$transaction(async (tx) => {
+      return transact(database, async (tx) => {
         const draft = await readDraft(tx, employeeId, id);
         if (draft.status === "CANCELED") return draft;
         if (draft.status !== "PENDING")
@@ -99,7 +107,7 @@ export function createDraftService(
     async confirm(employeeId: string, id: string) {
       let pending = false;
       try {
-        return await database.$transaction(async (tx) => {
+        return await transact(database, async (tx) => {
           const draft = await readDraft(tx, employeeId, id);
           if (draft.status === "CONFIRMED") {
             const ticket = await tx.ticket.findFirst({
