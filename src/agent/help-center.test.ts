@@ -398,10 +398,10 @@ test("timeout cancela a chamada e registra contingência", async () => {
   expect(model.doGenerateCalls).toHaveLength(1);
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
-    reason: "O modelo excedeu o limite de espera de 4,5 segundos.",
+    reason: "O modelo excedeu o limite de espera de 20 segundos.",
     consultations: [],
   });
-}, 10_000);
+}, 30_000);
 
 test("a busca ignora consultas genéricas e encontra títulos com acentos", async () => {
   expect(

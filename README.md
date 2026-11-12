@@ -24,7 +24,7 @@ O agent usa Mastra e Gemini 3.5 Flash-Lite (`LLM_MODEL=google/gemini-3.5-flash-l
 
 Trade-off atual: uma mensagem de TI exige até três requisições ao modelo (classificação, chamada de busca e resposta), sem contar novas tentativas por falha. Isso garante a classificação antes de disponibilizar ferramentas, ao custo de latência e tokens adicionais.
 
-Retries automáticos estão desabilitados. JSON inválido ou fora do schema permite uma nova tentativa da etapa, dentro do orçamento compartilhado de 4,5 segundos de geração. Falha persistente, indisponibilidade ou timeout produz pedido de detalhes com segurança baixa e motivo registrado. Esse limite reduz a espera, mas pode interromper uma orientação útil: na medição manual, VPN/monitor passaram de 32,83/30,98 s para 4,55/4,54 s **com contingência por timeout**, não com atendimento concluído. A meta de resposta útil abaixo de 5 s permanece pendente; a busca no SQLite levou cerca de 2 ms.
+Retries automáticos estão desabilitados. JSON inválido ou fora do schema permite uma nova tentativa da etapa, dentro do orçamento compartilhado de 20 segundos de geração. Falha persistente, indisponibilidade ou timeout produz pedido de detalhes com segurança baixa e motivo registrado. O timeout protege contra falhas e não representa uma meta de latência. A meta de resposta útil abaixo de 5 s permanece pendente; a busca no SQLite levou cerca de 2 ms.
 
 ## Verificações
 

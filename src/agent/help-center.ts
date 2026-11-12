@@ -96,7 +96,7 @@ export async function respondToConversation(
     tools: { search_help_center: search },
   });
 
-  const abortSignal = AbortSignal.timeout(4_500);
+  const abortSignal = AbortSignal.timeout(20_000);
   async function validated<T>(
     schema: z.ZodType<T>,
     generate: () => Promise<unknown>,
@@ -171,7 +171,7 @@ export async function respondToConversation(
     }
   } catch (error) {
     failureReason = abortSignal.aborted
-      ? "O modelo excedeu o limite de espera de 4,5 segundos."
+      ? "O modelo excedeu o limite de espera de 20 segundos."
       : error instanceof Error && error.message === "INVALID_MODEL_RESPONSE"
         ? "O modelo retornou JSON inválido ou fora do schema em duas tentativas."
         : "Não foi possível obter uma resposta válida do provedor do modelo.";
