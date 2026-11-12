@@ -45,19 +45,22 @@ export function createEmployeeTicketTools(
     subject?: string,
   ) {
     try {
-      const tickets = number
+      const activeStatuses = [
+        "OPEN",
+        "WAITING_FOR_ANALYST",
+        "IN_PROGRESS",
+        "APPROVED",
+      ] as const;
+      let tickets = number
         ? [await service.get(employeeId, number)].filter(
             (ticket): ticket is EmployeeTicket => !!ticket,
           )
-        : await service.list(employeeId, {
-            statuses: [
-              "OPEN",
-              "WAITING_FOR_ANALYST",
-              "IN_PROGRESS",
-              "APPROVED",
-            ],
-            subject,
-          });
+        : await service.list(employeeId, { statuses: activeStatuses, subject });
+      // O modelo às vezes usa termos genéricos ("chamado") como assunto; sem
+      // correspondência, mostramos todos os ativos para o funcionário escolher.
+      const subjectMissed = !number && !!subject && tickets.length === 0;
+      if (subjectMissed)
+        tickets = await service.list(employeeId, { statuses: activeStatuses });
       observed = tickets;
       consultations.push({
         tool,
@@ -65,14 +68,18 @@ export function createEmployeeTicketTools(
         result: {
           status: "success",
           articleIds: [],
-          summary: tickets.length
-            ? tickets
-                .map(
-                  (ticket) =>
-                    `${ticket.number}: ${ticket.title}, ${ticket.status}, prazo ${ticket.dueAt?.toISOString() ?? "não pendente"}${ticket.isOverdue ? ", vencido" : ""}`,
-                )
-                .join("; ")
-            : "Nenhum chamado próprio encontrado.",
+          summary:
+            (subjectMissed
+              ? `Nenhum chamado ativo sobre "${subject}"; listados todos os ativos. `
+              : "") +
+            (tickets.length
+              ? tickets
+                  .map(
+                    (ticket) =>
+                      `${ticket.number}: ${ticket.title}, ${ticket.status}, prazo ${ticket.dueAt?.toISOString() ?? "não pendente"}${ticket.isOverdue ? ", vencido" : ""}`,
+                  )
+                  .join("; ")
+              : "Nenhum chamado próprio encontrado."),
         },
       });
       const result = { tickets: tickets.map(ticketCard) };

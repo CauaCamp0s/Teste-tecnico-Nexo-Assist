@@ -74,3 +74,28 @@ test("atraso informa tempo real sem atualização e prazo da prioridade", async 
     ),
   ).toContain("há 2 horas, acima do prazo de 1 hora corrida");
 });
+
+test("assunto genérico sem correspondência lista todos os chamados ativos", async () => {
+  const queries: Consultation[] = [];
+  const tools = createEmployeeTicketTools(
+    f.ana,
+    createTicketService(f.db, f.clock),
+    queries,
+    [],
+  );
+  const record = buildDecisionRecord(
+    {
+      understanding: { intent: "ti", summary: "Consulta" },
+      confidence: "alta",
+      reason: "Dados consultados",
+    },
+    queries,
+  );
+  await tools.tools.list_tickets.execute!({ subject: "chamado" }, {} as never);
+  expect(queries.at(-1)?.result.summary).toContain(
+    'Nenhum chamado ativo sobre "chamado"; listados todos os ativos.',
+  );
+  expect(tools.presentation(record)?.payload.options!.length).toBeGreaterThan(
+    1,
+  );
+});
