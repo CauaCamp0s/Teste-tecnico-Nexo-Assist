@@ -4,19 +4,21 @@ Agente de atendimento para o service desk de TI da Nexo.
 
 ## Desenvolvimento local
 
-Requisitos: Node.js >=20.9 e npm. Para executar os testes com Vitest 5, use Node.js 22.12+, 24 ou 26+.
+Requisitos: Node.js >=22.12 e npm.
+
+Copie `.env.example` para `.env` e execute:
 
 ```sh
 npm ci
-npm run db:generate
-npm run db:migrate
-npm run db:seed
+npm run setup
 npm run dev
 ```
 
-Antes dos comandos, copie `.env.example` para `.env`. O SQLite local será criado em `prisma/dev.db`. Acesse http://localhost:3000.
+O SQLite local será criado em `prisma/dev.db`. Acesse http://localhost:3000.
 
 O seed adiciona três funcionários, um analista e seis artigos, sem duplicar registros nem sobrescrever dados existentes. Os e-mails de exemplo estão em `prisma/seed-data.ts`.
+
+Para entrar, use `ana.souza@nexo.com.br` (funcionária) ou `rafael.lima@nexo.com.br` (analista) com qualquer senha não vazia, conforme o login de demonstração do desafio.
 
 ## Verificações
 
@@ -34,4 +36,4 @@ Use `npm run format` para formatar os arquivos e `npm run test:watch` para execu
 
 ## Estado atual
 
-Base Next.js com TypeScript estrito e Prisma/SQLite para usuários, artigos, conversas e mensagens. As funcionalidades de atendimento serão adicionadas em etapas.
+Login com sessão persistida e rotas protegidas por papel. As telas de chat e console são iniciais; as funcionalidades de atendimento serão adicionadas em etapas.
