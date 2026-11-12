@@ -46,6 +46,14 @@ const activityLabels = {
   find_duplicate_candidates: "verificou duplicidade",
 };
 
+function actionActivity(action: string) {
+  if (action.startsWith("Persistiu rascunho")) return "montou o rascunho";
+  if (action.startsWith("Cancelou o rascunho")) return "cancelou o rascunho";
+  if (action.startsWith("Encaminhou a conversa"))
+    return "encaminhou para analista";
+  return readableDecisionText(action);
+}
+
 export function ActivityLine({ record }: { record: DecisionRecord | null }) {
   return (
     <div className={styles.activity}>
@@ -68,7 +76,7 @@ export function ActivityLine({ record }: { record: DecisionRecord | null }) {
         <span>✓ calculou o prazo</span>
       )}
       {record?.executedActions.map((action) => (
-        <span key={action}>✓ {readableDecisionText(action)}</span>
+        <span key={action}>✓ {actionActivity(action)}</span>
       ))}
       {!!record?.modelRetries?.length && (
         <span>↻ nova tentativa do modelo</span>

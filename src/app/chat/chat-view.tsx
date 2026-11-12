@@ -14,6 +14,7 @@ import { ActivityLine, DecisionDetails } from "./decision-details";
 import styles from "./chat.module.css";
 import { MessagePayload } from "./message-payload";
 import { isRetryableReply } from "@/agent/decisions";
+import { useRouter } from "next/navigation";
 
 export function ChatView({
   conversationId,
@@ -26,6 +27,7 @@ export function ChatView({
   initialMessages: ChatMessage[];
   firstName: string;
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
   const [phase, setPhase] = useState<"idle" | "sending" | "thinking">("idle");
@@ -48,6 +50,7 @@ export function ChatView({
           if (active) {
             setMessages(result.messages);
             setCurrentStatus(result.status);
+            if (result.status !== currentStatus) router.refresh();
           }
         })
         .catch(() => {
@@ -61,7 +64,7 @@ export function ChatView({
       active = false;
       clearInterval(timer);
     };
-  }, [conversationId, paused]);
+  }, [conversationId, paused, currentStatus, router]);
   const last = messages.at(-1);
   const pendingMessage =
     last?.role === "EMPLOYEE"
@@ -120,6 +123,7 @@ export function ChatView({
       const latest = await refreshConversation(conversationId);
       setMessages(latest.messages);
       setCurrentStatus(latest.status);
+      if (latest.status !== currentStatus) router.refresh();
     } catch {
       setError(
         "A conexão foi interrompida. Sua mensagem está salva. Tente obter a resposta novamente ou atualize a conversa.",

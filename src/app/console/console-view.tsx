@@ -13,6 +13,8 @@ import { ActivityLine, DecisionDetails } from "@/app/chat/decision-details";
 import { MessagePayload } from "@/app/chat/message-payload";
 import { formatDate, readableDecisionText } from "@/lib/presentation";
 import styles from "./console.module.css";
+import { BrandMark } from "@/app/brand-mark";
+import { TicketPanel } from "./ticket-panel";
 
 type Snapshot = Awaited<ReturnType<typeof getConsoleSnapshot>>;
 
@@ -108,7 +110,7 @@ export function ConsoleView({
     <main className={styles.shell} aria-label="Console do analista">
       <aside className={styles.rail} aria-label="Conta do analista">
         <a href="/console" aria-label="Nexo Assist" className={styles.logo}>
-          N
+          <BrandMark />
         </a>
         <span title={analystName}>
           {analystName
@@ -327,10 +329,13 @@ export function ConsoleView({
               }{" "}
               ativos · {detail.tickets.length} no total
             </p>
-            <MessagePayload
-              payload={{ tickets: detail.tickets }}
-              disabled
-              onOption={() => {}}
+            <TicketPanel
+              tickets={detail.tickets}
+              relatedNumbers={detail.messages.flatMap((message) =>
+                message.payload?.tickets?.length === 1
+                  ? message.payload.tickets.map((ticket) => ticket.number)
+                  : [],
+              )}
             />
             {detail.ticketsUnavailable ? (
               <div className={styles.error} role="alert">

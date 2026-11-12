@@ -1,9 +1,13 @@
 .shell {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: 64px 320px minmax(340px, 1fr) 310px;
+  grid-template-columns: 64px 340px minmax(340px, 1fr) 320px;
   height: 100dvh;
   background: #fff;
-  color: #19202c;
+  color: #1b2431;
   font-size: 14px;
 }
 .shell button,
@@ -24,7 +28,7 @@
   align-items: center;
   gap: 20px;
   padding: 20px 6px;
-  background: #edf0f5;
+  background: #f6f7f9;
   border-right: 1px solid #e0e4eb;
 }
 .rail span {
@@ -35,12 +39,13 @@
   font-weight: 600;
 }
 .rail button {
+  color: #3d4656;
   border: 0;
   background: transparent;
 }
 .logo {
   font-weight: 800;
-  color: #235bba;
+  color: #0069c7;
   font-size: 25px;
   text-decoration: none;
 }
@@ -93,13 +98,14 @@
   color: #566174;
 }
 .filters button[aria-pressed="true"] {
-  background: #e3edff;
-  color: #235bba;
+  background: #0285f712;
+  color: #0069c7;
 }
 .queueItems {
   overflow: auto;
 }
 .queueItem {
+  color: #1b2431;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 7px;
@@ -111,8 +117,8 @@
   padding: 18px;
 }
 .queueItem[aria-pressed="true"] {
-  background: #eaf1ff;
-  box-shadow: inset 3px 0 #2764ca;
+  background: #0285f712;
+  box-shadow: inset 3px 0 #0062c4;
 }
 .queueItem time {
   font-size: 11px;
@@ -127,17 +133,23 @@
   color: #637084;
 }
 .state {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 5px;
   font-size: 12px;
   color: #596779;
 }
 .state[data-status="WAITING_FOR_ANALYST"] {
-  color: #a16a13;
+  color: #946300;
+  background: #f5a50018;
 }
 .state[data-status="ANALYST"] {
-  color: #245cb0;
+  color: #0069c7;
+  background: #0285f712;
 }
 .state[data-status="CLOSED"] {
-  color: #237047;
+  color: #00804a;
+  background: #00bd6c14;
 }
 .conversation {
   display: flex;
@@ -180,8 +192,8 @@
 }
 .controls button:last-child,
 .reply button {
-  background: #2764ca;
-  border-color: #2764ca;
+  background: #0062c4;
+  border-color: #0062c4;
   color: white;
 }
 .history {
@@ -275,6 +287,37 @@
 }
 .tickets dl {
   grid-template-columns: 1fr;
+}
+.tickets > h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b6472;
+  margin: 20px 0 8px;
+}
+.compactTicket {
+  border-bottom: 1px solid #e6e8ec;
+  padding: 14px 0;
+}
+.compactTicket summary {
+  cursor: pointer;
+  line-height: 1.6;
+}
+.compactTicket summary strong,
+.compactTicket summary span,
+.compactTicket summary small {
+  display: block;
+}
+.compactTicket summary strong {
+  font-weight: 500;
+  font-size: 14px;
+}
+.compactTicket summary span,
+.compactTicket summary small {
+  font-size: 12px;
+  color: #5b6472;
+}
+.compactTicket summary small[data-overdue="true"] {
+  color: #946300;
 }
 .empty,
 .notice {

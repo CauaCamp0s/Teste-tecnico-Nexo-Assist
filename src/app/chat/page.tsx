@@ -56,6 +56,21 @@ export default async function ChatPage({
           </svg>
           <span>Nexo Assist</span>
         </a>
+        <details className={styles.mobileHistory}>
+          <summary>Conversas</summary>
+          <nav>
+            {conversations.map((item) => (
+              <a key={item.id} href={`/chat?id=${item.id}`}>
+                {formatDate(item.createdAt)} ·{" "}
+                {item.status === "AGENT"
+                  ? "Assistente"
+                  : item.status === "CLOSED"
+                    ? "Encerrada"
+                    : "Atendimento humano"}
+              </a>
+            ))}
+          </nav>
+        </details>
         <nav>
           <a href="/chat" aria-current="page" className={styles.navActive}>
             <span aria-hidden="true">◷</span> Atendimento

@@ -29,7 +29,7 @@ test("limite bloqueia opções de mensagem, mas mantém confirmação pendente e
       onDraft={() => {}}
     />,
   );
-  expect(html).toContain('type="button">Tentar novamente');
+  expect(html).toMatch(/<button[^>]*>Tentar novamente<\/button>/);
   expect(html).toContain('disabled="">Mais dados');
   expect(html).toContain("Incidente");
   expect(html).toContain("Rede e VPN");

@@ -27,7 +27,9 @@ export function MessagePayload({
         <section className={styles.ticketCard} key={ticket.id}>
           <header>
             <strong>{ticket.number}</strong>
-            <span>{statusLabels[ticket.status]}</span>
+            <span className={styles.badge} data-status={ticket.status}>
+              {statusLabels[ticket.status]}
+            </span>
           </header>
           <h3>{ticket.title}</h3>
           <p>{ticket.description}</p>
@@ -35,7 +37,11 @@ export function MessagePayload({
             <dt>Categoria</dt>
             <dd>{categoryLabels[ticket.category]}</dd>
             <dt>Prioridade</dt>
-            <dd>{priorityLabels[ticket.priority]}</dd>
+            <dd>
+              <span className={styles.priority} data-priority={ticket.priority}>
+                {priorityLabels[ticket.priority]}
+              </span>
+            </dd>
             <dt>Aberto em</dt>
             <dd>{formatDate(ticket.createdAt)}</dd>
             <dt>Última atualização</dt>
@@ -65,7 +71,7 @@ export function MessagePayload({
                   ? "Atualização"
                   : "Reabertura"}
             </strong>
-            <span>
+            <span className={styles.badge} data-status={payload.draft.status}>
               {payload.draft.status === "PENDING"
                 ? "Aguardando confirmação"
                 : payload.draft.status === "CONFIRMED"
@@ -83,7 +89,14 @@ export function MessagePayload({
             <dt>Categoria</dt>
             <dd>{categoryLabels[payload.draft.category]}</dd>
             <dt>Prioridade</dt>
-            <dd>{priorityLabels[payload.draft.priority]}</dd>
+            <dd>
+              <span
+                className={styles.priority}
+                data-priority={payload.draft.priority}
+              >
+                {priorityLabels[payload.draft.priority]}
+              </span>
+            </dd>
             <dt>Afetados</dt>
             <dd>{impactLabels[payload.draft.impact]}</dd>
             <dt>Previsão de prazo</dt>
@@ -97,12 +110,24 @@ export function MessagePayload({
             <div className={styles.quickOptions}>
               <button
                 type="button"
+                className={styles.confirmButton}
                 disabled={disabled}
                 onClick={() => onDraft(payload.draft!.id, "confirm")}
               >
                 {payload.draft.failureCode === "UNAVAILABLE"
                   ? "Tentar novamente"
                   : "Confirmar"}
+              </button>
+              <button
+                type="button"
+                disabled={disabled || limitReached}
+                onClick={() =>
+                  onOption(
+                    "Quero editar os dados do rascunho antes de confirmar.",
+                  )
+                }
+              >
+                Editar
               </button>
               <button
                 type="button"

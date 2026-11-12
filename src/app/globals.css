@@ -1,6 +1,13 @@
 * {
   box-sizing: border-box;
 }
+:root {
+  --ink: #1b2431;
+  --muted: #5b6472;
+  --rule: #e6e8ec;
+  --desk: #f6f7f9;
+  --blue: #0062c4;
+}
 
 body {
   margin: 0;
