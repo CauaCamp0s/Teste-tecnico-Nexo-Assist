@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  ANALYST
+}
+
+enum ConversationStatus {
+  AGENT
+  WAITING_FOR_ANALYST
+  ANALYST
+  CLOSED
+}
+
+enum MessageRole {
+  EMPLOYEE
+  AGENT
+  ANALYST
+  SYSTEM
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  role          UserRole       @default(EMPLOYEE)
+  createdAt     DateTime       @default(now())
+  conversations Conversation[]
+  messages      Message[]
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id         String             @id @default(cuid())
+  employeeId String
+  employee   User               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  status     ConversationStatus @default(AGENT)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  messages   Message[]
+
+  @@index([employeeId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  role           MessageRole
+  authorId       String?
+  author         User?        @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content        String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt, id])
+}
