@@ -95,6 +95,7 @@ export function isRetryableReply(record: DecisionRecord | null | undefined) {
 export function buildDecisionRecord(
   assessment: z.infer<typeof assessmentSchema>,
   consultations: Consultation[],
+  helpQuestion = true,
 ): DecisionRecord {
   const outsideScope = ["rh", "financeiro", "facilities"].includes(
     assessment.understanding.intent,
@@ -107,7 +108,12 @@ export function buildDecisionRecord(
   let confidence = assessment.confidence;
 
   // Evidência ausente impede segurança alta, mesmo que o modelo a declare.
-  if (!outsideScope && !hasArticles && confidence === "alta") {
+  if (
+    helpQuestion &&
+    assessment.understanding.intent === "ti" &&
+    !hasArticles &&
+    confidence === "alta"
+  ) {
     confidence = "média";
     appliedRules.push(
       "Sem artigo relevante consultado, a segurança é limitada a média.",

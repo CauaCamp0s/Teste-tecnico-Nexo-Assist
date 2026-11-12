@@ -64,6 +64,7 @@ export function createChatDraftService(
           "Ação explícita do funcionário autenticado, validada pelo servidor sem LLM.",
       },
       [],
+      false,
     );
     record.confidence = "alta";
     record.appliedRules = [

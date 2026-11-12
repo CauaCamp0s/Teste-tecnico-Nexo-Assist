@@ -182,6 +182,10 @@ test("consulta por notebook vai direto ao único chamado ativo do funcionário",
   ]);
   expect(result.message.content).not.toContain("Sobre qual");
   expect(result.record.consultations[0].input).toEqual({ subject: "notebook" });
+  expect(result.record.confidence).toBe("alta");
+  expect(result.record.appliedRules.join(" ")).not.toContain(
+    "Sem artigo relevante",
+  );
   const all = await services.ticketService.list(f.ana, { subject: "notebook" });
   expect(all.every((ticket) => ticket.employeeId === f.ana)).toBe(true);
   const active = await turn("Meus chamados", assessment, {
@@ -222,6 +226,10 @@ test("abertura com uma pergunta até confirmação, sem urgência redundante nem
     priority: "HIGH",
     status: "PENDING",
   });
+  expect(second.record.confidence).toBe("alta");
+  expect(second.record.appliedRules.join(" ")).not.toContain(
+    "Sem artigo relevante",
+  );
   expect(second.record.appliedRules.join(" ")).toContain(
     "Compromisso no mesmo dia não perguntado",
   );

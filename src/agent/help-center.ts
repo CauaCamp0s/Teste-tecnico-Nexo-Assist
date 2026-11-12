@@ -389,7 +389,15 @@ export async function respondToConversation(
       "Não foi possível responder agora por uma falha técnica do modelo. Sua mensagem está salva. Use Tentar novamente para continuar.";
   }
 
-  const decisionRecord = buildDecisionRecord(assessment, consultations);
+  const decisionRecord = buildDecisionRecord(
+    assessment,
+    consultations,
+    !proposal &&
+      !handoff?.requested &&
+      !consultations.some(
+        (consultation) => consultation.tool !== "search_help_center",
+      ),
+  );
   let payload: ChatPayload = {};
   decisionRecord.modelRetries = modelRetries;
   if (failureReason) {
