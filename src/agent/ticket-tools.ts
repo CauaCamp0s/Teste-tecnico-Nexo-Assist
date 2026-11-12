@@ -13,17 +13,29 @@ export function createEmployeeTicketTools(
 ) {
   let observed: EmployeeTicket[] | undefined;
   let unavailable = false;
-  async function consult(tool: "list_tickets" | "get_ticket", number?: string) {
+  async function consult(
+    tool: "list_tickets" | "get_ticket",
+    number?: string,
+    subject?: string,
+  ) {
     try {
       const tickets = number
         ? [await service.get(employeeId, number)].filter(
             (t): t is EmployeeTicket => !!t,
           )
-        : await service.list(employeeId);
+        : await service.list(employeeId, {
+            statuses: [
+              "OPEN",
+              "WAITING_FOR_ANALYST",
+              "IN_PROGRESS",
+              "APPROVED",
+            ],
+            subject,
+          });
       observed = tickets;
       consultations.push({
         tool,
-        input: number ? { number } : {},
+        input: number ? { number } : subject ? { subject } : {},
         result: {
           status: "success",
           articleIds: [],
@@ -45,7 +57,7 @@ export function createEmployeeTicketTools(
       unavailable = true;
       consultations.push({
         tool,
-        input: number ? { number } : {},
+        input: number ? { number } : subject ? { subject } : {},
         result: {
           status: "error",
           articleIds: [],
@@ -62,9 +74,11 @@ export function createEmployeeTicketTools(
       list_tickets: createTool({
         id: "list_tickets",
         description:
-          "Lista somente os chamados do funcionário autenticado. Use para consulta sem número.",
-        inputSchema: z.object({}),
-        execute: () => consult("list_tickets"),
+          "Lista chamados ativos (não resolvidos nem encerrados) do funcionário autenticado. Sem número, extraia subject do assunto informado, por exemplo notebook. Busca em título e descrição.",
+        inputSchema: z.object({
+          subject: z.string().trim().min(1).max(200).optional(),
+        }),
+        execute: ({ subject }) => consult("list_tickets", undefined, subject),
       }),
       get_ticket: createTool({
         id: "get_ticket",

@@ -49,6 +49,7 @@ export type EmployeeTicket = TicketSla & {
 };
 
 export type TicketListOptions = {
+  subject?: string;
   statuses?: readonly TicketStatus[];
 };
 

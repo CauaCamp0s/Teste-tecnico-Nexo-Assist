@@ -157,6 +157,29 @@ test("consulta sem número pede seleção; selecionado vencido oferece transfer�
   expect(await f.db.ticketOperation.count()).toBe(1);
 });
 
+test("consulta por notebook vai direto ao único chamado ativo do funcionário", async () => {
+  const result = await turn("Como está meu chamado do notebook?", assessment, {
+    name: "list_tickets",
+    input: { subject: "notebook" },
+  });
+  expect(result.payload.tickets?.map((ticket) => ticket.number)).toEqual([
+    "INC-20311",
+  ]);
+  expect(result.message.content).not.toContain("Sobre qual");
+  expect(result.record.consultations[0].input).toEqual({ subject: "notebook" });
+  const all = await services.ticketService.list(f.ana, { subject: "notebook" });
+  expect(all.every((ticket) => ticket.employeeId === f.ana)).toBe(true);
+  const active = await turn("Meus chamados", assessment, {
+    name: "list_tickets",
+    input: {},
+  });
+  expect(
+    active.payload.tickets?.every(
+      (ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status),
+    ),
+  ).toBe(true);
+});
+
 test("abertura com uma pergunta até confirmação, sem urgência redundante nem prioridade livre", async () => {
   const first = await turn(
     "VPN erro 809 no Windows 11 desde ontem. Quero chamado.",

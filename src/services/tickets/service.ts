@@ -180,10 +180,27 @@ export function createTicketService(
       change(employeeId, number, content, key, "REOPEN"),
     async list(employeeId, options = {}) {
       requireEmployeeId(employeeId);
+      if (
+        options.subject !== undefined &&
+        (typeof options.subject !== "string" || options.subject.length > 200)
+      )
+        throw new TicketError(
+          "INVALID_INPUT",
+          "Informe um assunto com até 200 caracteres.",
+        );
+      const subject = options.subject?.trim();
       const tickets = await database.ticket.findMany({
         where: {
           employeeId,
           status: options.statuses ? { in: [...options.statuses] } : undefined,
+          ...(subject
+            ? {
+                OR: [
+                  { title: { contains: subject } },
+                  { description: { contains: subject } },
+                ],
+              }
+            : {}),
         },
         orderBy: [{ createdAt: "desc" }, { number: "asc" }],
       });

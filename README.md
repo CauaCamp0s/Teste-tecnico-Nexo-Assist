@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+`list_tickets` lista ativos por padrão (exclui RESOLVED/CLOSED) e aceita `subject`; o serviço filtra título/descrição no banco sempre junto ao proprietário. Um único resultado é exibido diretamente; dois ou mais pedem seleção. O serviço geral mantém a opção de listar todos para o painel do analista.
+
 Coleta otimizada: título, tipo e categoria são inferidos pelo modelo quando o relato permite. O servidor prioriza lacunas de impacto/interrupção e dispensa perguntar compromisso hoje quando interrupção total já define alta/crítica; essa dispensa fica registrada, sem fingir que o funcionário respondeu “não”.
 
 Correção: falha técnica do modelo (timeout, resposta inválida, 429/503 esgotado) mantém a conversa em AGENT com `modelFailure` e nova tentativa sobre a mesma mensagem, sem consumir o limite de 30. Segurança baixa só encaminha quando uma resposta válida identifica um problema de TI; saudações e intenção indefinida pedem contexto.
