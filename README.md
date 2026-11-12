@@ -36,6 +36,8 @@ O SLA usa `America/Sao_Paulo`, segunda a sexta das 8h às 18h, sem feriados: cr�
 
 Ana recebe os três chamados do Anexo B (`INC-20311`, `REQ-10442`, `INC-20150`) e mais quatro cenários: VPN aberta e vencida, impressora resolvida há 2 dias, software resolvido há 12 dias e requisição recente dentro do prazo. Bruno e Carla possuem um chamado cada para verificar isolamento entre funcionários. Os exemplos cobrem as quatro prioridades.
 
+O ponto de entrada do legado simulado é `ticketService`, em `src/services/tickets/index.ts`, com contrato `TicketService`: `list(employeeId, { statuses? })` e `get(employeeId, number)`. O funcionário deve vir da sessão autenticada, nunca do modelo. Toda consulta filtra o proprietário no banco; número alheio e inexistente retornam `null`, e identidade ausente é rejeitada. Sem filtro de status, a lista inclui todos os chamados próprios, dos mais recentes aos mais antigos pela abertura. O retorno inclui `dueAt` e `isOverdue`, calculados na leitura sem alterar as datas persistidas. O adaptador SQLite e seu relógio podem ser substituídos sem alterar o contrato.
+
 ## Verificações
 
 ```sh
