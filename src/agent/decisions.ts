@@ -31,6 +31,15 @@ export type DecisionRecord = {
   confidence: z.infer<typeof assessmentSchema>["confidence"];
   reason: string;
   appliedRules: string[];
+  modelRetries?: ModelRetry[];
+  modelFailure?: "timeout" | "invalid_response" | "unavailable";
+};
+
+export type ModelRetry = {
+  stage: "initial" | "answer" | "recovery";
+  statusCode: 429 | 503;
+  delayMs: number;
+  outcome: "pending" | "succeeded" | "failed" | "aborted";
 };
 
 export function buildDecisionRecord(

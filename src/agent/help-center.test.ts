@@ -446,6 +446,89 @@ test.each([
   },
 );
 
+test.each([429, 503])(
+  "repete uma vez HTTP %s após 1s e registra sem repetir a busca",
+  async (statusCode) => {
+    let calls = 0;
+    const times: number[] = [];
+    const model = new MastraLanguageModelV2Mock({
+      doGenerate: async () => {
+        times.push(performance.now());
+        calls++;
+        if (calls === 1) return tool("VPN erro 809");
+        if (calls === 2)
+          throw Object.assign(new Error("Indisponível"), {
+            statusCode,
+            isRetryable: true,
+          });
+        return text(assessment);
+      },
+    });
+    const message = await respond(employeeId, conversationId, model);
+    expect(model.doGenerateCalls).toHaveLength(3);
+    expect(times[2] - times[1]).toBeGreaterThanOrEqual(950);
+    expect(times[2] - times[1]).toBeLessThan(2_500);
+    const record = message.decisionRecord as unknown as DecisionRecord;
+    expect(record.modelRetries).toEqual([
+      { stage: "answer", statusCode, delayMs: 1_000, outcome: "succeeded" },
+    ]);
+    expect(record.consultations).toHaveLength(1);
+    expect(record.executedActions).toEqual([]);
+  },
+);
+
+test("limita retry de indisponibilidade a um por mensagem, mesmo em etapas diferentes", async () => {
+  let calls = 0;
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      if (++calls === 2) return tool("VPN erro 809");
+      throw Object.assign(new Error("Indisponível"), {
+        statusCode: 503,
+        isRetryable: true,
+      });
+    },
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(3);
+  expect(message.decisionRecord).toMatchObject({
+    modelFailure: "unavailable",
+    confidence: "baixa",
+    modelRetries: [{ stage: "initial", outcome: "succeeded" }],
+  });
+});
+
+test("registra retry esgotado e persiste a resposta de contingência", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      throw Object.assign(new Error("Indisponível"), {
+        statusCode: 503,
+        isRetryable: true,
+      });
+    },
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(2);
+  expect(message.decisionRecord).toMatchObject({
+    modelFailure: "unavailable",
+    confidence: "baixa",
+    modelRetries: [{ statusCode: 503, outcome: "failed" }],
+  });
+});
+
+test.each([400, 401, 403, 500])("não repete HTTP %s", async (statusCode) => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      throw Object.assign(new Error("Erro"), { statusCode, isRetryable: true });
+    },
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(1);
+  expect(message.decisionRecord).toMatchObject({
+    modelRetries: [],
+    modelFailure: "unavailable",
+  });
+});
+
 test("a busca ignora consultas genéricas e encontra títulos com acentos", async () => {
   expect(
     await search.searchHelpCenter("preciso de ajuda com meu problema"),
