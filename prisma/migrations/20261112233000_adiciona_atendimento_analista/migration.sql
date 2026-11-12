@@ -1,0 +1,2 @@
+ALTER TABLE "Conversation" ADD COLUMN "analystId" TEXT REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Conversation" ADD COLUMN "transferSummary" TEXT;

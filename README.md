@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+O serviço do analista permite à equipe listar e ler a fila; somente o responsável que assumiu pode responder, devolver ou encerrar. Assunção é transacional e registra `analystId`. As server actions exigem `requireRole("ANALYST")`; o serviço também valida o papel no banco. O painel obtém chamados pelo proprietário persistido na conversa, nunca por um id fornecido pelo cliente. Os eventos de controle ficam no histórico como mensagens de sistema. Nenhum prazo ilustrativo de N1/N2 do protótipo é prometido.
+
 O limite conta as 30 mensagens do funcionário (inclusive ao analista), não respostas nem cliques determinísticos de confirmação. A 30ª recebe resposta normalmente; a 31ª é rejeitada em transação. Nova conversa não encerra nem remove atendimento pendente; o histórico fica acessível no menu. Em espera/atendimento humano, o funcionário pode acrescentar informações até o limite, mas o agent permanece pausado. O chat consulta atualizações a cada 3 segundos fora de AGENT. Encerramento é terminal; a devolução ao agent exige que um analista tenha assumido antes.
 
 ### Transferência e disponibilidade do legado

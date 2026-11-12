@@ -83,17 +83,18 @@ enum TicketDraftStatus {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  email            String            @unique
-  name             String
-  role             UserRole          @default(EMPLOYEE)
-  createdAt        DateTime          @default(now())
-  conversations    Conversation[]
-  messages         Message[]
-  sessions         Session[]
-  tickets          Ticket[]
-  ticketDrafts     TicketDraft[]
-  ticketOperations TicketOperation[]
+  id                    String            @id @default(cuid())
+  email                 String            @unique
+  name                  String
+  role                  UserRole          @default(EMPLOYEE)
+  createdAt             DateTime          @default(now())
+  conversations         Conversation[]    @relation("EmployeeConversations")
+  assignedConversations Conversation[]    @relation("AnalystConversations")
+  messages              Message[]
+  sessions              Session[]
+  tickets               Ticket[]
+  ticketDrafts          TicketDraft[]
+  ticketOperations      TicketOperation[]
 }
 
 model Session {
@@ -118,14 +119,17 @@ model Article {
 }
 
 model Conversation {
-  id           String             @id @default(cuid())
-  employeeId   String
-  employee     User               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  status       ConversationStatus @default(AGENT)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  messages     Message[]
-  ticketDrafts TicketDraft[]
+  id              String             @id @default(cuid())
+  employeeId      String
+  employee        User               @relation("EmployeeConversations", fields: [employeeId], references: [id], onDelete: Restrict)
+  analystId       String?
+  analyst         User?              @relation("AnalystConversations", fields: [analystId], references: [id], onDelete: Restrict)
+  transferSummary String?
+  status          ConversationStatus @default(AGENT)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  messages        Message[]
+  ticketDrafts    TicketDraft[]
 
   @@index([employeeId, updatedAt])
 }
