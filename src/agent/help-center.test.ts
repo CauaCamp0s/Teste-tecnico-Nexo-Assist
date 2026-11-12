@@ -301,6 +301,108 @@ test("não persiste resposta se o analista assumir durante a geração", async (
   ).toBe(0);
 });
 
+test.each(["json", "schema"])(
+  "persiste contingência após duas respostas inválidas: %s",
+  async (kind) => {
+    const invalid =
+      kind === "schema"
+        ? text({ answer: 42 })
+        : {
+            ...text({}),
+            content: [{ type: "text" as const, text: "isto não é JSON" }],
+          };
+    const model = new MastraLanguageModelV2Mock({
+      doGenerate: [
+        text(assessment),
+        tool("VPN erro 809"),
+        invalid,
+        tool("VPN erro 809"),
+        invalid,
+      ],
+    });
+    const message = await respond(employeeId, conversationId, model);
+    const record = message.decisionRecord as unknown as DecisionRecord;
+    expect(model.doGenerateCalls).toHaveLength(5);
+    expect(record).toMatchObject({
+      decision: "pedir_detalhes",
+      confidence: "baixa",
+      executedActions: [],
+    });
+    expect(record.reason).toContain("duas tentativas");
+    expect(record.consultations).toHaveLength(2);
+    expect(message.content).toContain("Pode detalhar");
+    expect(
+      (await db.message.findUniqueOrThrow({ where: { id: message.id } }))
+        .decisionRecord,
+    ).toEqual(record);
+  },
+);
+
+test("recupera resposta fora do schema em uma nova tentativa", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: [
+      text(assessment),
+      tool("VPN erro 809"),
+      text({ answer: 42 }),
+      tool("VPN erro 809"),
+      text({ ...assessment, answer: "Qual versão do Windows você utiliza?" }),
+    ],
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(5);
+  expect(message.content).toContain("Qual versão");
+  expect((message.decisionRecord as unknown as DecisionRecord).confidence).toBe(
+    "alta",
+  );
+});
+
+test("falha de transporte não dispara retry e persiste segurança baixa", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      throw new Error("Provedor indisponível");
+    },
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(1);
+  expect(message.decisionRecord).toMatchObject({
+    confidence: "baixa",
+    decision: "pedir_detalhes",
+    consultations: [],
+  });
+});
+
+test("classificação inválida tenta novamente sem consultar artigos", async () => {
+  const model = new MastraLanguageModelV2Mock({ doGenerate: text({}) });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(2);
+  expect(message.decisionRecord).toMatchObject({
+    confidence: "baixa",
+    consultations: [],
+    decision: "pedir_detalhes",
+  });
+});
+
+test("timeout cancela a chamada e registra contingência", async () => {
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async ({ abortSignal }) => {
+      return new Promise((_, reject) => {
+        abortSignal!.addEventListener(
+          "abort",
+          () => reject(abortSignal!.reason),
+          { once: true },
+        );
+      });
+    },
+  });
+  const message = await respond(employeeId, conversationId, model);
+  expect(model.doGenerateCalls).toHaveLength(1);
+  expect(message.decisionRecord).toMatchObject({
+    confidence: "baixa",
+    reason: "O modelo excedeu o limite de espera de 4,5 segundos.",
+    consultations: [],
+  });
+}, 10_000);
+
 test("a busca ignora consultas genéricas e encontra títulos com acentos", async () => {
   expect(
     await search.searchHelpCenter("preciso de ajuda com meu problema"),
