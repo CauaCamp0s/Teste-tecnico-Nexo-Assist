@@ -14,8 +14,12 @@ export const answerSchema = assessmentSchema.extend({
 });
 
 export type Consultation = {
-  tool: "search_help_center";
-  input: { query: string };
+  tool:
+    | "search_help_center"
+    | "list_tickets"
+    | "get_ticket"
+    | "find_duplicate_candidates";
+  input: Record<string, string>;
   result: {
     articleIds: string[];
     summary: string;
@@ -26,8 +30,18 @@ export type Consultation = {
 export type DecisionRecord = {
   understanding: z.infer<typeof assessmentSchema>["understanding"];
   consultations: Consultation[];
-  decision: "orientar_com_artigos" | "pedir_detalhes" | "redirecionar";
-  executedActions: [];
+  decision:
+    | "orientar_com_artigos"
+    | "pedir_detalhes"
+    | "redirecionar"
+    | "consultar_chamados"
+    | "oferecer_transferencia"
+    | "propor_rascunho"
+    | "confirmar_alteracao"
+    | "cancelar_rascunho"
+    | "transferir"
+    | "indisponivel";
+  executedActions: string[];
   confidence: z.infer<typeof assessmentSchema>["confidence"];
   reason: string;
   appliedRules: string[];

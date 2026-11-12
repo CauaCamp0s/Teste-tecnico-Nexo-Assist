@@ -5,6 +5,13 @@ const decisions = {
   orientar_com_artigos: "Orientar com artigos",
   pedir_detalhes: "Pedir mais detalhes",
   redirecionar: "Redirecionar ao departamento responsável",
+  consultar_chamados: "Consultar chamados próprios",
+  oferecer_transferencia: "Oferecer atendimento humano",
+  propor_rascunho: "Propor rascunho para confirmação",
+  confirmar_alteracao: "Confirmar alteração",
+  cancelar_rascunho: "Cancelar rascunho",
+  transferir: "Transferir atendimento",
+  indisponivel: "Informar indisponibilidade",
 };
 const intents = {
   ti: "TI",

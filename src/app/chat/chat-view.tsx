@@ -11,6 +11,7 @@ import {
 } from "./actions";
 import { ActivityLine, DecisionDetails } from "./decision-details";
 import styles from "./chat.module.css";
+import { MessagePayload } from "./message-payload";
 
 export function ChatView({
   conversationId,
@@ -219,6 +220,16 @@ export function ChatView({
               </div>
               {message.role === "AGENT" && message.decisionRecord && (
                 <DecisionDetails record={message.decisionRecord} />
+              )}
+              {message.payload && (
+                <MessagePayload
+                  payload={message.payload}
+                  disabled={busy || paused || cannotSend}
+                  onOption={(text) => {
+                    setDraft(text);
+                    input.current?.focus();
+                  }}
+                />
               )}
             </article>
           ))}

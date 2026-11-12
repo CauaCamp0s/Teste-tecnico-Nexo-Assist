@@ -600,3 +600,59 @@
     animation: none;
   }
 }
+.payload {
+  margin: 16px 0;
+}
+.ticketCard {
+  border: 1px solid #dce3df;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 12px 0;
+  background: white;
+}
+.ticketCard header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #4e665b;
+}
+.ticketCard h3 {
+  margin: 16px 0 8px;
+  font-size: 17px;
+}
+.ticketCard p {
+  white-space: pre-wrap;
+  color: #59645f;
+  line-height: 1.5;
+}
+.ticketCard dl {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 8px;
+  font-size: 13px;
+}
+.ticketCard dd {
+  margin: 0;
+}
+.overdue {
+  color: #a64b27;
+}
+.quickOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quickOptions button {
+  background: white;
+  color: #21674b;
+  border: 1px solid #b8d2c4;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.quickOptions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

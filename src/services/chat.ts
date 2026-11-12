@@ -2,6 +2,7 @@ import type { Message } from "@prisma/client";
 import type { DecisionRecord } from "@/agent/decisions";
 import { respondToConversation } from "@/agent/help-center";
 import { addMessage, getConversation } from "./conversations";
+import type { ChatPayload } from "./chat-payload";
 
 export type ChatMessage = {
   id: string;
@@ -9,6 +10,7 @@ export type ChatMessage = {
   content: string;
   createdAt: string;
   decisionRecord: DecisionRecord | null;
+  payload?: ChatPayload | null;
 };
 
 export function serializeChatMessage(message: Message): ChatMessage {
@@ -18,6 +20,7 @@ export function serializeChatMessage(message: Message): ChatMessage {
     content: message.content,
     createdAt: message.createdAt.toISOString(),
     decisionRecord: message.decisionRecord as DecisionRecord | null,
+    payload: message.payload as ChatPayload | null,
   };
 }
 
