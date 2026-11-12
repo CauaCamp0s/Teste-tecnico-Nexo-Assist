@@ -22,6 +22,8 @@ Para entrar, use `ana.souza@nexo.com.br` (funcionária) ou `rafael.lima@nexo.com
 
 O agent usa Mastra e OpenAI (`LLM_MODEL`), com modo Fast e esforço `low`. Preencha `OPENAI_API_KEY` somente no `.env` para chamadas reais. Os testes usam modelo mockado. O histórico vem do SQLite; o registro de decisões fica em JSON junto à mensagem, sem memória do Mastra.
 
+Trade-off atual: uma mensagem de TI exige até três requisições ao modelo (classificação, chamada de busca e resposta), sem contar novas tentativas por falha. Isso garante a classificação antes de disponibilizar ferramentas, ao custo de latência e tokens adicionais.
+
 ## Verificações
 
 ```sh

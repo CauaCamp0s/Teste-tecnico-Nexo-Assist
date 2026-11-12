@@ -27,7 +27,7 @@ export type DecisionRecord = {
   understanding: z.infer<typeof assessmentSchema>["understanding"];
   consultations: Consultation[];
   decision: "orientar_com_artigos" | "pedir_detalhes" | "redirecionar";
-  executedActions: { tool: "search_help_center"; description: string }[];
+  executedActions: [];
   confidence: z.infer<typeof assessmentSchema>["confidence"];
   reason: string;
   appliedRules: string[];
@@ -67,12 +67,7 @@ export function buildDecisionRecord(
       : hasArticles && confidence !== "baixa"
         ? "orientar_com_artigos"
         : "pedir_detalhes",
-    executedActions: consultations
-      .filter((query) => query.result.status === "success")
-      .map(() => ({
-        tool: "search_help_center",
-        description: "Consultou a central de ajuda.",
-      })),
+    executedActions: [],
     confidence,
     reason: assessment.reason,
     appliedRules,

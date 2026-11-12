@@ -119,7 +119,7 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test("executa a ferramenta real e persiste apenas consultas e ações observadas pelo código", async () => {
+test("registra a busca real como consulta, sem atribuir ações de alteração de estado", async () => {
   const model = modelFor("VPN erro 809");
   const message = await respond(employeeId, conversationId, model);
   const record = message.decisionRecord as unknown as DecisionRecord;
@@ -130,12 +130,7 @@ test("executa a ferramenta real e persiste apenas consultas e ações observadas
     result: { status: "success" },
   });
   expect(record.consultations[0].result.summary).toContain("VPN com erro 809");
-  expect(record.executedActions).toEqual([
-    {
-      tool: "search_help_center",
-      description: "Consultou a central de ajuda.",
-    },
-  ]);
+  expect(record.executedActions).toEqual([]);
   expect(record.decision).toBe("orientar_com_artigos");
   expect(record.confidence).toBe("alta");
   expect(JSON.stringify(record)).not.toContain("invented");
@@ -159,6 +154,7 @@ test.each(["alta", "média", "baixa"])(
     );
     const record = message.decisionRecord as unknown as DecisionRecord;
     expect(record.consultations[0].result.articleIds).toEqual([]);
+    expect(record.executedActions).toEqual([]);
     expect(record.confidence).toBe(
       confidence === "alta" ? "média" : confidence,
     );
