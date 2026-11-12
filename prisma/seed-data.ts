@@ -1,4 +1,5 @@
 import { PrismaClient, UserRole } from "@prisma/client";
+import { seedTickets } from "./ticket-seed";
 
 const users = [
   {
@@ -62,7 +63,7 @@ const articles = [
   },
 ];
 
-export async function seedDatabase(db: PrismaClient) {
+export async function seedDatabase(db: PrismaClient, now = new Date()) {
   await db.$transaction([
     ...users.map((user) =>
       db.user.upsert({
@@ -79,4 +80,5 @@ export async function seedDatabase(db: PrismaClient) {
       }),
     ),
   ]);
+  await seedTickets(db, now);
 }

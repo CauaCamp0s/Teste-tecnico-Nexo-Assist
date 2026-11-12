@@ -16,7 +16,7 @@ npm run dev
 
 O SQLite local será criado em `prisma/dev.db`. Acesse http://localhost:3000.
 
-O seed adiciona três funcionários, um analista e seis artigos, sem duplicar registros nem sobrescrever dados existentes. Os e-mails de exemplo estão em `prisma/seed-data.ts`.
+O seed adiciona três funcionários, um analista, seis artigos e nove chamados, sem duplicar registros nem sobrescrever dados existentes. Os e-mails de exemplo estão em `prisma/seed-data.ts` e os chamados em `prisma/ticket-seed.ts`. As datas dos chamados são relativas à primeira execução que os insere; rodar o seed novamente preserva suas datas e eventuais alterações.
 
 Para entrar, use `ana.souza@nexo.com.br` (funcionária) ou `rafael.lima@nexo.com.br` (analista) com qualquer senha não vazia, conforme o login de demonstração do desafio.
 
@@ -33,6 +33,8 @@ JSON inválido ou fora do schema permite uma chamada extra de recuperação, sem
 O módulo `src/services/tickets` concentra as regras do sistema legado simulado, separado do agent. Chamados INC/REQ têm proprietário, categoria, impacto, prioridade, status e datas persistidas. A classificação usa impacto e interrupção (`stopped`: sem conseguir trabalhar; `degraded`: há alternativa; `none`: pedido/melhoria) e compromisso no mesmo dia. Paralisação de equipe/empresa é crítica; de uma pessoa ou compromisso hoje é alta; trabalho prejudicado com alternativa é média; pedidos sem urgência são baixa.
 
 O SLA usa `America/Sao_Paulo`, segunda a sexta das 8h às 18h, sem feriados: crítica = 1 hora corrida; alta = 4 horas úteis; média = 30 horas úteis (3 dias); baixa = 50 horas úteis (5 dias). `createdAt` inicia a primeira resposta; cada atualização de negócio define `lastUpdatedAt` e reinicia o prazo. A data não muda automaticamente ao salvar metadados. Vencido significa `agora > prazo`; resolvidos e encerrados não têm prazo pendente. O cálculo usa Temporal para respeitar o fuso IANA, sem depender do fuso da máquina.
+
+Ana recebe os três chamados do Anexo B (`INC-20311`, `REQ-10442`, `INC-20150`) e mais quatro cenários: VPN aberta e vencida, impressora resolvida há 2 dias, software resolvido há 12 dias e requisição recente dentro do prazo. Bruno e Carla possuem um chamado cada para verificar isolamento entre funcionários. Os exemplos cobrem as quatro prioridades.
 
 ## Verificações
 
