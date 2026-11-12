@@ -136,6 +136,7 @@ test("registra a busca real como consulta, sem atribuir ações de alteração d
   expect(JSON.stringify(record)).not.toContain("invented");
   expect(JSON.stringify(record)).not.toContain("criou chamado");
   expect(model.doGenerateCalls).toHaveLength(3);
+  expect(model.doGenerateCalls[1].responseFormat?.type).not.toBe("json");
   expect(fetch).not.toHaveBeenCalled();
   await db.$disconnect();
   const saved = await db.message.findFirstOrThrow({

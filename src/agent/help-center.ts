@@ -14,15 +14,18 @@ import {
 
 function configuredModel(): MastraModelConfig {
   const model = process.env.LLM_MODEL;
-  if (!model?.startsWith("openai/"))
-    throw new Error("Configure LLM_MODEL no formato openai/modelo.");
-  if (!process.env.OPENAI_API_KEY)
-    throw new Error("Configure OPENAI_API_KEY para executar o agent.");
+  if (!model || !/^google\/[^/\s]+$/.test(model))
+    throw new Error("Configure LLM_MODEL no formato google/modelo.");
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey)
+    throw new Error(
+      "Configure GOOGLE_GENERATIVE_AI_API_KEY para executar o agent.",
+    );
   return model;
 }
 
 const providerOptions = {
-  openai: { reasoningEffort: "low", serviceTier: "fast", store: false },
+  google: { thinkingConfig: { thinkingLevel: "low" } },
 } as const;
 const redirects = {
   rh: "Esse assunto deve ser tratado com o RH. Posso ajudar com dúvidas de TI.",
@@ -111,7 +114,8 @@ export async function respondToConversation(
     content = "Pode explicar qual é a sua dúvida ou problema de TI?";
   } else {
     const response = await agent.generate(history, {
-      structuredOutput: { schema: answerSchema },
+      // Gemini não combina chamada obrigatória de ferramenta com JSON nativo.
+      structuredOutput: { schema: answerSchema, jsonPromptInjection: true },
       maxSteps: 2,
       providerOptions,
       prepareStep: ({ stepNumber }) => ({
