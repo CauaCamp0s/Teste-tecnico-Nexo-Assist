@@ -15,13 +15,17 @@ export async function getConsoleSnapshot(
   conversationId?: string,
 ) {
   const analyst = await requireRole("ANALYST");
-  const conversations = await service.list(analyst.id, status);
+  const [conversations, counts] = await Promise.all([
+    service.list(analyst.id, status),
+    service.counts(analyst.id),
+  ]);
   const selectedId = conversationId ?? conversations[0]?.id;
   const detail = selectedId
     ? await service.detail(analyst.id, selectedId)
     : null;
   return {
     conversations,
+    counts,
     detail: detail
       ? {
           ...detail,

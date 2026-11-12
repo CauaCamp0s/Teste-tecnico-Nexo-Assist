@@ -107,3 +107,24 @@ test("indisponibilidade dos chamados preserva histórico e controles do analista
     (await unavailable.detail("n1", f.conversationId)).messages,
   ).toHaveLength(2);
 });
+
+test("contagens incluem todos os status e acompanham assumir e encerrar", async () => {
+  const analyst = createAnalystService(f.db, createTicketService(f.db));
+  const initial = await analyst.counts("n1");
+  expect(initial.ALL).toBe(await f.db.conversation.count());
+  expect(initial.WAITING_FOR_ANALYST).toBe(1);
+  expect(initial.ANALYST).toBe(0);
+  await analyst.assume("n1", f.conversationId);
+  expect(await analyst.counts("n1")).toMatchObject({
+    ALL: initial.ALL,
+    WAITING_FOR_ANALYST: 0,
+    ANALYST: 1,
+  });
+  await analyst.close("n1", f.conversationId);
+  expect(await analyst.counts("n1")).toMatchObject({
+    ALL: initial.ALL,
+    ANALYST: 0,
+    CLOSED: initial.CLOSED + 1,
+  });
+  await expect(analyst.counts(f.ana)).rejects.toThrow("Acesso restrito");
+});

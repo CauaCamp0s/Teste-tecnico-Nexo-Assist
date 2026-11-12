@@ -160,6 +160,9 @@ export function ConsoleView({
               }}
             >
               {status === "ALL" ? "Todas" : conversationLabels[status]}
+              <span className={styles.filterCount}>
+                {snapshot?.counts[status] ?? "—"}
+              </span>
             </button>
           ))}
         </div>

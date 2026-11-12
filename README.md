@@ -77,6 +77,15 @@ Stack: Next.js 16, React 19, TypeScript estrito, Prisma 6/SQLite, Mastra 1.82, Z
 
 ## Como o agent decide
 
+Refinamentos após validação no navegador:
+
+- O modelo primeiro classifica e propõe consultas estruturadas; o servidor bloqueia consultas fora de TI antes de executá-las. A segunda chamada recebe os resultados reais.
+- A central de ajuda precede a coleta quando há orientação aplicável. VPN 809 pergunta Windows 10/11: Windows 10 recebe os passos; Windows 11 segue para chamado conforme o artigo. A regra de segurança por ausência de artigo se limita à orientação pela central, não a operações de chamados.
+- Opções de duplicidade oferecidas usam a proposta persistida e são interpretadas pelo código, sem chamar o modelo novamente. O alvo continua sujeito a propriedade, estado e janela de reabertura.
+- Seletores compactos e opções rápidas enviam imediatamente. O vencimento informa tempo sem atualização e prazo da prioridade. O resumo humano usa seções curtas e rótulos legíveis.
+- Números continuam o maior sufixo numérico por tipo, com reserva atômica na transação. No seed atual, os próximos são `INC-20316` e `REQ-10445`; números já emitidos são preservados.
+- Filtros do console mostram contagens reais de todos os status, independentemente do filtro selecionado, atualizadas no polling.
+
 **O modelo interpreta e propõe; o código executa e impõe as regras.**
 
 1. A mensagem do funcionário é persistida antes de chamar o modelo. As ferramentas recebem `employeeId` pelo closure criado com a sessão autenticada; o modelo não escolhe o proprietário.
@@ -123,7 +132,7 @@ npm test
 npm run build
 ```
 
-A suíte atual tem 211 testes em 29 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
+A suíte atual tem 223 testes em 29 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
 
 As Telas 1–5 também foram verificadas em navegador desktop/celular, incluindo assumir/responder e entrega por atualização periódica, com banco temporário. Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
 

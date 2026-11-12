@@ -150,6 +150,25 @@ export function createAnalystService(
     reply,
     returnToAgent,
     close,
+    async counts(analystId: string) {
+      await authorize(analystId);
+      const grouped = await database.conversation.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      });
+      const counts = {
+        ALL: 0,
+        AGENT: 0,
+        WAITING_FOR_ANALYST: 0,
+        ANALYST: 0,
+        CLOSED: 0,
+      };
+      for (const group of grouped) {
+        counts[group.status] = group._count._all;
+        counts.ALL += group._count._all;
+      }
+      return counts;
+    },
     async list(analystId: string, status?: ConversationStatus) {
       await authorize(analystId);
       if (status) z.enum(ConversationStatus).parse(status);

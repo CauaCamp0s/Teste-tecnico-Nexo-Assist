@@ -101,6 +101,15 @@
   background: #0285f712;
   color: #0069c7;
 }
+.filterCount {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #1b24310a;
+  font-variant-numeric: tabular-nums;
+}
 .queueItems {
   overflow: auto;
 }
