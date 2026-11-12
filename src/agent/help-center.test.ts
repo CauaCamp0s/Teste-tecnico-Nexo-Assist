@@ -137,6 +137,18 @@ test("registra a busca real como consulta, sem atribuir ações de alteração d
   expect(JSON.stringify(record)).not.toContain("criou chamado");
   expect(model.doGenerateCalls).toHaveLength(2);
   expect(model.doGenerateCalls[0].responseFormat?.type).not.toBe("json");
+  expect(model.doGenerateCalls[1].responseFormat?.type).toBe("json");
+  expect(model.doGenerateCalls[1].tools ?? []).toEqual([]);
+  expect(model.doGenerateCalls[1].toolChoice).toEqual({ type: "none" });
+  expect(
+    model.doGenerateCalls[1].prompt.some((message) => message.role === "tool"),
+  ).toBe(false);
+  expect(JSON.stringify(model.doGenerateCalls[1].prompt)).toContain(
+    "VPN com erro 809",
+  );
+  expect(JSON.stringify(model.doGenerateCalls[1].prompt)).toContain(
+    "Windows 10",
+  );
   expect(fetch).not.toHaveBeenCalled();
   await db.$disconnect();
   const saved = await db.message.findFirstOrThrow({
@@ -339,6 +351,7 @@ test("recupera resposta fora do schema em uma nova tentativa", async () => {
   const message = await respond(employeeId, conversationId, model);
   expect(model.doGenerateCalls).toHaveLength(3);
   expect(model.doGenerateCalls[2].tools ?? []).toEqual([]);
+  expect(model.doGenerateCalls[2].responseFormat?.type).toBe("json");
   expect(JSON.stringify(model.doGenerateCalls[2].prompt)).toContain(
     "VPN com erro 809",
   );
