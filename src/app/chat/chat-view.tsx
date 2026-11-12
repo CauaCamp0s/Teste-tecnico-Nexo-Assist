@@ -13,6 +13,7 @@ import {
 import { ActivityLine, DecisionDetails } from "./decision-details";
 import styles from "./chat.module.css";
 import { MessagePayload } from "./message-payload";
+import { isRetryableReply } from "@/agent/decisions";
 
 export function ChatView({
   conversationId,
@@ -65,7 +66,7 @@ export function ChatView({
   const pendingMessage =
     last?.role === "EMPLOYEE"
       ? last
-      : last?.decisionRecord?.modelFailure
+      : isRetryableReply(last?.decisionRecord)
         ? (messages.findLast((message) => message.role === "EMPLOYEE") ?? null)
         : null;
 
@@ -296,7 +297,7 @@ export function ChatView({
                     Tentar obter resposta
                   </button>
                 )}
-                <a href="/chat">Atualizar conversa</a>
+                <a href={`/chat?id=${conversationId}`}>Atualizar conversa</a>
               </div>
             </div>
           )}
@@ -312,8 +313,11 @@ export function ChatView({
         )}
         {cannotSend ? (
           <p>
-            Esta conversa não aceita novas mensagens. O histórico e o
-            atendimento pendente estão preservados.
+            {count >= 30
+              ? "Limite de 30 mensagens atingido."
+              : "Esta conversa foi encerrada."}{" "}
+            Inicie uma nova conversa para continuar. O histórico e o atendimento
+            pendente estão preservados.
           </p>
         ) : (
           <form onSubmit={submit} className={styles.composer} aria-busy={busy}>

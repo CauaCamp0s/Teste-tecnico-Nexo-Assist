@@ -29,6 +29,7 @@ export function ConsoleView({
   const [search, setSearch] = useState("");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
@@ -44,7 +45,7 @@ export function ConsoleView({
           filter === "ALL" ? undefined : filter,
           selectedId,
         );
-        if (active) {
+        if (active && !locked.current) {
           setSnapshot(result);
           setError(null);
           if (!selectedId && result.detail) setSelectedId(result.detail.id);
@@ -75,6 +76,7 @@ export function ConsoleView({
     locked.current = true;
     setBusy(true);
     setError(null);
+    setActionError(null);
     try {
       await manageAnalystConversation(
         detail.id,
@@ -83,7 +85,7 @@ export function ConsoleView({
       );
       if (action === "reply") setText("");
     } catch {
-      setError(
+      setActionError(
         "Não foi possível concluir a ação. O atendimento pode ter mudado; atualize e confira antes de tentar novamente.",
       );
     } finally {
@@ -194,12 +196,13 @@ export function ConsoleView({
         aria-label="Histórico e atendimento"
         aria-busy={loading || busy}
       >
-        {error && (
+        {(error || actionError) && (
           <div className={styles.error} role="alert">
-            {error}
+            {actionError || error}
             <button
               type="button"
               onClick={() => {
+                setActionError(null);
                 setLoading(true);
                 setRevision((value) => value + 1);
               }}
@@ -329,7 +332,23 @@ export function ConsoleView({
               disabled
               onOption={() => {}}
             />
-            {!detail.tickets.length && <p>Nenhum chamado encontrado.</p>}
+            {detail.ticketsUnavailable ? (
+              <div className={styles.error} role="alert">
+                <p>
+                  O serviço de chamados está temporariamente indisponível. O
+                  histórico e os controles de atendimento continuam disponíveis.
+                </p>
+                <button
+                  type="button"
+                  disabled={loading || busy}
+                  onClick={() => setRevision((value) => value + 1)}
+                >
+                  Tentar consultar novamente
+                </button>
+              </div>
+            ) : (
+              !detail.tickets.length && <p>Nenhum chamado encontrado.</p>
+            )}
           </>
         ) : (
           <p>Os chamados aparecerão ao selecionar uma conversa.</p>

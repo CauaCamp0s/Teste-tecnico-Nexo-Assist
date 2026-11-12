@@ -5,6 +5,7 @@ import {
 } from "./tickets/test-support";
 import { createTicketService } from "./tickets/service";
 import { createAnalystService } from "./analyst";
+import { TicketUnavailableError } from "./tickets/errors";
 
 let f: TicketFixture;
 let service: ReturnType<typeof createAnalystService>;
@@ -83,4 +84,26 @@ test("encerra atendimento assumido preservando histórico", async () => {
   const detail = await service.detail("n1", f.conversationId);
   expect(detail.status).toBe("CLOSED");
   expect(detail.messages).toHaveLength(2);
+});
+
+test("indisponibilidade dos chamados preserva histórico e controles do analista", async () => {
+  const unavailable = createAnalystService(f.db, {
+    ...createTicketService(f.db),
+    list: async () => {
+      throw new TicketUnavailableError(3);
+    },
+  });
+  const detail = await unavailable.detail("n1", f.conversationId);
+  expect(detail.ticketsUnavailable).toBe(true);
+  expect(detail.transferSummary).toBe("VPN indisponível");
+  expect(detail.tickets).toEqual([]);
+  await unavailable.assume("n1", f.conversationId);
+  await unavailable.reply(
+    "n1",
+    f.conversationId,
+    "Já li o histórico e vou ajudar.",
+  );
+  expect(
+    (await unavailable.detail("n1", f.conversationId)).messages,
+  ).toHaveLength(2);
 });

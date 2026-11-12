@@ -62,6 +62,17 @@ export type ModelRetry = {
   outcome: "pending" | "succeeded" | "failed" | "aborted";
 };
 
+export function isRetryableReply(record: DecisionRecord | null | undefined) {
+  return (
+    !!record &&
+    (!!record.modelFailure ||
+      (record.decision === "indisponivel" &&
+        record.consultations.some(
+          (consultation) => consultation.result.status === "error",
+        )))
+  );
+}
+
 export function buildDecisionRecord(
   assessment: z.infer<typeof assessmentSchema>,
   consultations: Consultation[],

@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import type { TicketService } from "./tickets/types";
 import { transitionConversation } from "./conversation-state";
+import { TicketUnavailableError } from "./tickets/errors";
 
 export function createAnalystService(
   database: PrismaClient,
@@ -175,10 +176,16 @@ export function createAnalystService(
         },
       });
       if (!conversation) throw new Error("Conversa não encontrada.");
-      return {
-        ...conversation,
-        tickets: await tickets.list(conversation.employeeId),
-      };
+      try {
+        return {
+          ...conversation,
+          tickets: await tickets.list(conversation.employeeId),
+          ticketsUnavailable: false,
+        };
+      } catch (error) {
+        if (!(error instanceof TicketUnavailableError)) throw error;
+        return { ...conversation, tickets: [], ticketsUnavailable: true };
+      }
     },
     async act(
       analystId: string,

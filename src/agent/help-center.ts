@@ -12,6 +12,7 @@ import {
   type Consultation,
   type ModelRetry,
   type DecisionRecord,
+  isRetryableReply,
 } from "./decisions";
 import { createModelRetry } from "./model-retry";
 import { ticketService, ticketFactory } from "@/services/tickets";
@@ -58,7 +59,7 @@ export async function respondToConversation(
   const lastMessage = conversation.messages.at(-1);
   const retryingFailure =
     lastMessage?.role === "AGENT" &&
-    !!(lastMessage.decisionRecord as DecisionRecord | null)?.modelFailure;
+    isRetryableReply(lastMessage.decisionRecord as DecisionRecord | null);
   if (lastMessage?.role !== "EMPLOYEE" && !retryingFailure)
     throw new Error("Não há mensagem do funcionário para responder.");
 

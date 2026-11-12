@@ -1,5 +1,6 @@
 import type { Message } from "@prisma/client";
 import type { DecisionRecord } from "@/agent/decisions";
+import { isRetryableReply } from "@/agent/decisions";
 import { respondToConversation } from "@/agent/help-center";
 import { addMessage, getConversation } from "./conversations";
 import type { ChatPayload } from "./chat-payload";
@@ -56,7 +57,7 @@ export async function generateChatReply(
   );
   const failed =
     last?.role === "AGENT" &&
-    !!(last.decisionRecord as DecisionRecord | null)?.modelFailure;
+    isRetryableReply(last.decisionRecord as DecisionRecord | null);
   if (
     last?.role === "AGENT" &&
     latestEmployee?.id === employeeMessageId &&
