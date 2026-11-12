@@ -4,6 +4,7 @@ import type { EmployeeTicket, TicketService, TicketContent } from "./types";
 import { parseTicketContent, requireEmployeeId } from "./validation";
 import { ownedTicket, writeTicket, type TicketDatabase } from "./writes";
 import { TicketError } from "./errors";
+import { assertCanReopen, reopenWindowMs } from "./reopening";
 
 function toEmployeeTicket(ticket: Ticket, now: Date): EmployeeTicket {
   return {
@@ -53,16 +54,12 @@ export function createTicketService(
             "INVALID_INPUT",
             "O tipo do chamado existente não pode ser alterado.",
           );
-        if (
-          kind === "REOPEN"
-            ? ticket.status !== "RESOLVED"
-            : ["RESOLVED", "CLOSED"].includes(ticket.status)
-        ) {
+        if (kind === "REOPEN") {
+          assertCanReopen(ticket, now);
+        } else if (["RESOLVED", "CLOSED"].includes(ticket.status)) {
           throw new TicketError(
             "INVALID_STATE",
-            kind === "REOPEN"
-              ? "Somente chamados resolvidos podem ser reabertos."
-              : "Somente chamados abertos podem receber complementos.",
+            "Somente chamados abertos podem receber complementos.",
           );
         }
         await tx.ticket.updateMany({
@@ -82,6 +79,27 @@ export function createTicketService(
     return toEmployeeTicket(result, now);
   }
   return {
+    async findDuplicateCandidates(employeeId) {
+      requireEmployeeId(employeeId);
+      const now = clock();
+      const tickets = await database.ticket.findMany({
+        where: {
+          employeeId,
+          OR: [
+            { status: { notIn: ["RESOLVED", "CLOSED"] } },
+            {
+              status: "RESOLVED",
+              resolvedAt: {
+                gte: new Date(now.getTime() - reopenWindowMs),
+                lte: now,
+              },
+            },
+          ],
+        },
+        orderBy: [{ createdAt: "desc" }, { number: "asc" }],
+      });
+      return tickets.map((ticket) => toEmployeeTicket(ticket, now));
+    },
     async create(employeeId, input, idempotencyKey) {
       requireEmployeeId(employeeId);
       const content = parseTicketContent(input);

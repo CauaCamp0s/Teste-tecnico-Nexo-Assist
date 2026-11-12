@@ -42,6 +42,8 @@ O ponto de entrada do legado simulado é `ticketService`, em `src/services/ticke
 
 As escritas do legado (`create`, `addUpdate`, `reopen`) exigem chave de idempotência: a confirmação usa o id do rascunho. Chave repetida com conteúdo diferente é rejeitada. Complementos preservam a descrição anterior e reiniciam `lastUpdatedAt`; o tipo INC/REQ de um chamado existente não muda. A numeração nova começa em 100001 por tipo, em contador transacional separado da faixa dos exemplos. Estas funções ainda não têm rota HTTP ou interface.
 
+`findDuplicateCandidates(employeeId)` retorna chamados próprios ativos e resolvidos há até 7 dias corridos (168 horas, limite inclusivo), para comparação posterior pelo agent; não presume similaridade nem altera dados. Encerrados, resoluções ausentes/futuras e resolvidos mais antigos ficam fora. `reopen` exige status `RESOLVED` e a mesma janela, revalidada também ao confirmar o rascunho. Reabertura limpa `resolvedAt`, retorna a `OPEN` e reinicia o prazo.
+
 ## Verificações
 
 ```sh

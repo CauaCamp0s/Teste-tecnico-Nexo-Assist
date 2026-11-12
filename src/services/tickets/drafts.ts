@@ -4,6 +4,7 @@ import { TicketError } from "./errors";
 import { createTicketService } from "./service";
 import type { TicketService } from "./types";
 import { requireEmployeeId, ticketContentSchema } from "./validation";
+import { assertCanReopen } from "./reopening";
 
 const draftInputSchema = z
   .object({
@@ -137,6 +138,7 @@ export function createDraftService(
             : null;
           if (draft.kind !== "CREATE" && !target)
             throw new TicketError("NOT_FOUND", "Chamado não encontrado.");
+          if (draft.kind === "REOPEN") assertCanReopen(target!, clock());
           const ticket =
             draft.kind === "CREATE"
               ? await tickets.create(employeeId, content, draft.id)

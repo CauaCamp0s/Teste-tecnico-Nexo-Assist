@@ -57,6 +57,7 @@ export type TicketContent = Pick<
 >;
 
 export interface TicketService {
+  findDuplicateCandidates(employeeId: string): Promise<EmployeeTicket[]>;
   list(
     employeeId: string,
     options?: TicketListOptions,
