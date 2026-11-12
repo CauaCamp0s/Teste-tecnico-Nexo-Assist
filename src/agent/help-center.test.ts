@@ -19,6 +19,7 @@ const assessment = {
   understanding: { intent: "ti", summary: "Consulta sobre VPN" },
   confidence: "alta",
   reason: "O artigo descreve o erro informado.",
+  answer: "Pode informar mais detalhes?",
 };
 const usage = { inputTokens: 10, outputTokens: 10, totalTokens: 20 };
 
@@ -50,7 +51,6 @@ function tool(query: string) {
 function modelFor(query: string, confidence = "alta") {
   return new MastraLanguageModelV2Mock({
     doGenerate: [
-      text(assessment),
       tool(query),
       text({
         ...assessment,
@@ -135,8 +135,8 @@ test("registra a busca real como consulta, sem atribuir ações de alteração d
   expect(record.confidence).toBe("alta");
   expect(JSON.stringify(record)).not.toContain("invented");
   expect(JSON.stringify(record)).not.toContain("criou chamado");
-  expect(model.doGenerateCalls).toHaveLength(3);
-  expect(model.doGenerateCalls[1].responseFormat?.type).not.toBe("json");
+  expect(model.doGenerateCalls).toHaveLength(2);
+  expect(model.doGenerateCalls[0].responseFormat?.type).not.toBe("json");
   expect(fetch).not.toHaveBeenCalled();
   await db.$disconnect();
   const saved = await db.message.findFirstOrThrow({
@@ -169,7 +169,7 @@ test.each(["alta", "média", "baixa"])(
 );
 
 test.each(["rh", "financeiro", "facilities"])(
-  "redireciona %s sem oferecer ou executar ferramentas",
+  "redireciona %s sem executar ferramentas",
   async (intent) => {
     const searchSpy = vi.spyOn(search, "searchHelpCenter");
     const model = new MastraLanguageModelV2Mock({
@@ -185,7 +185,7 @@ test.each(["rh", "financeiro", "facilities"])(
     expect(record.executedActions).toEqual([]);
     expect(searchSpy).not.toHaveBeenCalled();
     expect(model.doGenerateCalls).toHaveLength(1);
-    expect(model.doGenerateCalls[0].tools ?? []).toEqual([]);
+    expect(model.doGenerateCalls[0].toolChoice).toEqual({ type: "auto" });
     expect(message.content).toContain("Esse assunto deve ser tratado");
   },
 );
@@ -217,10 +217,7 @@ test("usa o histórico persistido explicitamente e não inclui outras conversas"
 
 test("não inventa consulta quando o modelo deixa de chamar a ferramenta", async () => {
   const model = new MastraLanguageModelV2Mock({
-    doGenerate: [
-      text(assessment),
-      text({ ...assessment, answer: "Consultei tudo e resolvi." }),
-    ],
+    doGenerate: [text({ ...assessment, answer: "Consultei tudo e resolvi." })],
   });
   const message = await respond(employeeId, conversationId, model);
   const record = message.decisionRecord as unknown as DecisionRecord;
@@ -281,8 +278,7 @@ test("não persiste resposta se o analista assumir durante a geração", async (
   const model = new MastraLanguageModelV2Mock({
     doGenerate: async () => {
       step += 1;
-      if (step === 1) return text(assessment);
-      if (step === 2) return tool("VPN erro 809");
+      if (step === 1) return tool("VPN erro 809");
       await db.conversation.updateMany({
         where: { id: conversationId, employeeId },
         data: { status: "ANALYST" },
@@ -312,24 +308,18 @@ test.each(["json", "schema"])(
             content: [{ type: "text" as const, text: "isto não é JSON" }],
           };
     const model = new MastraLanguageModelV2Mock({
-      doGenerate: [
-        text(assessment),
-        tool("VPN erro 809"),
-        invalid,
-        tool("VPN erro 809"),
-        invalid,
-      ],
+      doGenerate: [tool("VPN erro 809"), invalid, invalid],
     });
     const message = await respond(employeeId, conversationId, model);
     const record = message.decisionRecord as unknown as DecisionRecord;
-    expect(model.doGenerateCalls).toHaveLength(5);
+    expect(model.doGenerateCalls).toHaveLength(3);
     expect(record).toMatchObject({
       decision: "pedir_detalhes",
       confidence: "baixa",
       executedActions: [],
     });
     expect(record.reason).toContain("duas tentativas");
-    expect(record.consultations).toHaveLength(2);
+    expect(record.consultations).toHaveLength(1);
     expect(message.content).toContain("Pode detalhar");
     expect(
       (await db.message.findUniqueOrThrow({ where: { id: message.id } }))
@@ -341,15 +331,17 @@ test.each(["json", "schema"])(
 test("recupera resposta fora do schema em uma nova tentativa", async () => {
   const model = new MastraLanguageModelV2Mock({
     doGenerate: [
-      text(assessment),
       tool("VPN erro 809"),
       text({ answer: 42 }),
-      tool("VPN erro 809"),
       text({ ...assessment, answer: "Qual versão do Windows você utiliza?" }),
     ],
   });
   const message = await respond(employeeId, conversationId, model);
-  expect(model.doGenerateCalls).toHaveLength(5);
+  expect(model.doGenerateCalls).toHaveLength(3);
+  expect(model.doGenerateCalls[2].tools ?? []).toEqual([]);
+  expect(JSON.stringify(model.doGenerateCalls[2].prompt)).toContain(
+    "VPN com erro 809",
+  );
   expect(message.content).toContain("Qual versão");
   expect((message.decisionRecord as unknown as DecisionRecord).confidence).toBe(
     "alta",
@@ -371,7 +363,7 @@ test("falha de transporte não dispara retry e persiste segurança baixa", async
   });
 });
 
-test("classificação inválida tenta novamente sem consultar artigos", async () => {
+test("resposta direta inválida tenta novamente sem consultar artigos", async () => {
   const model = new MastraLanguageModelV2Mock({ doGenerate: text({}) });
   const message = await respond(employeeId, conversationId, model);
   expect(model.doGenerateCalls).toHaveLength(2);
