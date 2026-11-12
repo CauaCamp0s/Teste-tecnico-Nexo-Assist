@@ -62,16 +62,31 @@ enum TicketImpact {
   COMPANY
 }
 
+enum TicketOperationKind {
+  CREATE
+  UPDATE
+  REOPEN
+}
+
+enum TicketDraftStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  FAILED
+}
+
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  name          String
-  role          UserRole       @default(EMPLOYEE)
-  createdAt     DateTime       @default(now())
-  conversations Conversation[]
-  messages      Message[]
-  sessions      Session[]
-  tickets       Ticket[]
+  id               String            @id @default(cuid())
+  email            String            @unique
+  name             String
+  role             UserRole          @default(EMPLOYEE)
+  createdAt        DateTime          @default(now())
+  conversations    Conversation[]
+  messages         Message[]
+  sessions         Session[]
+  tickets          Ticket[]
+  ticketDrafts     TicketDraft[]
+  ticketOperations TicketOperation[]
 }
 
 model Session {
@@ -96,13 +111,14 @@ model Article {
 }
 
 model Conversation {
-  id         String             @id @default(cuid())
-  employeeId String
-  employee   User               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  status     ConversationStatus @default(AGENT)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  messages   Message[]
+  id           String             @id @default(cuid())
+  employeeId   String
+  employee     User               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  status       ConversationStatus @default(AGENT)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  messages     Message[]
+  ticketDrafts TicketDraft[]
 
   @@index([employeeId, updatedAt])
 }
@@ -122,21 +138,68 @@ model Message {
 }
 
 model Ticket {
-  id            String         @id @default(cuid())
-  number        String         @unique
-  employeeId    String
-  employee      User           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  type          TicketType
-  category      TicketCategory
-  status        TicketStatus   @default(OPEN)
-  priority      TicketPriority
-  impact        TicketImpact
-  title         String
-  description   String
-  createdAt     DateTime       @default(now())
-  lastUpdatedAt DateTime?
-  resolvedAt    DateTime?
+  id              String            @id @default(cuid())
+  number          String            @unique
+  employeeId      String
+  employee        User              @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  type            TicketType
+  category        TicketCategory
+  status          TicketStatus      @default(OPEN)
+  priority        TicketPriority
+  impact          TicketImpact
+  title           String
+  description     String
+  createdAt       DateTime          @default(now())
+  lastUpdatedAt   DateTime?
+  resolvedAt      DateTime?
+  operations      TicketOperation[]
+  targetDrafts    TicketDraft[]     @relation("DraftTarget")
+  confirmedDrafts TicketDraft[]     @relation("DraftResult")
 
   @@index([employeeId, status])
   @@index([employeeId, createdAt])
+}
+
+model TicketSequence {
+  type  TicketType @id
+  value Int
+}
+
+model TicketOperation {
+  id             String              @id @default(cuid())
+  employeeId     String
+  employee       User                @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  idempotencyKey String
+  kind           TicketOperationKind
+  payloadHash    String
+  ticketId       String
+  ticket         Ticket              @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  createdAt      DateTime            @default(now())
+
+  @@unique([employeeId, idempotencyKey])
+}
+
+model TicketDraft {
+  id             String              @id @default(cuid())
+  employeeId     String
+  employee       User                @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  conversationId String
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  kind           TicketOperationKind
+  targetTicketId String?
+  targetTicket   Ticket?             @relation("DraftTarget", fields: [targetTicketId], references: [id], onDelete: Restrict)
+  resultTicketId String?
+  resultTicket   Ticket?             @relation("DraftResult", fields: [resultTicketId], references: [id], onDelete: Restrict)
+  title          String
+  description    String
+  type           TicketType
+  category       TicketCategory
+  priority       TicketPriority
+  impact         TicketImpact
+  status         TicketDraftStatus   @default(PENDING)
+  failureCode    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([employeeId, conversationId, status])
 }

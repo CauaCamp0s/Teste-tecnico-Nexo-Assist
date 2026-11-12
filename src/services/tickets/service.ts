@@ -1,12 +1,9 @@
-import type { PrismaClient, Ticket } from "@prisma/client";
+import type { Ticket } from "@prisma/client";
 import { getTicketSla } from "./sla";
-import type { EmployeeTicket, TicketService } from "./types";
-
-function requireEmployeeId(employeeId: string) {
-  if (typeof employeeId !== "string" || !employeeId.trim()) {
-    throw new Error("O funcionário é obrigatório para consultar chamados.");
-  }
-}
+import type { EmployeeTicket, TicketService, TicketContent } from "./types";
+import { parseTicketContent, requireEmployeeId } from "./validation";
+import { ownedTicket, writeTicket, type TicketDatabase } from "./writes";
+import { TicketError } from "./errors";
 
 function toEmployeeTicket(ticket: Ticket, now: Date): EmployeeTicket {
   return {
@@ -28,10 +25,96 @@ function toEmployeeTicket(ticket: Ticket, now: Date): EmployeeTicket {
 }
 
 export function createTicketService(
-  database: Pick<PrismaClient, "ticket">,
+  database: TicketDatabase,
   clock: () => Date = () => new Date(),
 ): TicketService {
+  async function change(
+    employeeId: string,
+    number: string,
+    input: TicketContent,
+    idempotencyKey: string,
+    kind: "UPDATE" | "REOPEN",
+  ) {
+    requireEmployeeId(employeeId);
+    const content = parseTicketContent(input);
+    const target = number.trim().toUpperCase();
+    const now = clock();
+    const result = await writeTicket(
+      database,
+      employeeId,
+      idempotencyKey,
+      kind,
+      { number: target, content },
+      now,
+      async (tx) => {
+        const ticket = await ownedTicket(tx, employeeId, target);
+        if (ticket.type !== content.type)
+          throw new TicketError(
+            "INVALID_INPUT",
+            "O tipo do chamado existente não pode ser alterado.",
+          );
+        if (
+          kind === "REOPEN"
+            ? ticket.status !== "RESOLVED"
+            : ["RESOLVED", "CLOSED"].includes(ticket.status)
+        ) {
+          throw new TicketError(
+            "INVALID_STATE",
+            kind === "REOPEN"
+              ? "Somente chamados resolvidos podem ser reabertos."
+              : "Somente chamados abertos podem receber complementos.",
+          );
+        }
+        await tx.ticket.updateMany({
+          where: { id: ticket.id, employeeId },
+          data: {
+            ...content,
+            description: `${ticket.description}\n\n${kind === "REOPEN" ? "Reabertura" : "Atualização"}:\n${content.description}`,
+            lastUpdatedAt: now,
+            ...(kind === "REOPEN"
+              ? { status: "OPEN" as const, resolvedAt: null }
+              : {}),
+          },
+        });
+        return ownedTicket(tx, employeeId, target);
+      },
+    );
+    return toEmployeeTicket(result, now);
+  }
   return {
+    async create(employeeId, input, idempotencyKey) {
+      requireEmployeeId(employeeId);
+      const content = parseTicketContent(input);
+      const now = clock();
+      const result = await writeTicket(
+        database,
+        employeeId,
+        idempotencyKey,
+        "CREATE",
+        content,
+        now,
+        async (tx) => {
+          const sequence = await tx.ticketSequence.upsert({
+            where: { type: content.type },
+            create: { type: content.type, value: 100_001 },
+            update: { value: { increment: 1 } },
+          });
+          return tx.ticket.create({
+            data: {
+              ...content,
+              employeeId,
+              number: `${content.type}-${sequence.value}`,
+              createdAt: now,
+            },
+          });
+        },
+      );
+      return toEmployeeTicket(result, now);
+    },
+    addUpdate: (employeeId, number, content, key) =>
+      change(employeeId, number, content, key, "UPDATE"),
+    reopen: (employeeId, number, content, key) =>
+      change(employeeId, number, content, key, "REOPEN"),
     async list(employeeId, options = {}) {
       requireEmployeeId(employeeId);
       const tickets = await database.ticket.findMany({

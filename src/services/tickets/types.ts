@@ -51,10 +51,32 @@ export type TicketListOptions = {
   statuses?: readonly TicketStatus[];
 };
 
+export type TicketContent = Pick<
+  EmployeeTicket,
+  "title" | "description" | "type" | "category" | "priority" | "impact"
+>;
+
 export interface TicketService {
   list(
     employeeId: string,
     options?: TicketListOptions,
   ): Promise<EmployeeTicket[]>;
   get(employeeId: string, number: string): Promise<EmployeeTicket | null>;
+  create(
+    employeeId: string,
+    content: TicketContent,
+    idempotencyKey: string,
+  ): Promise<EmployeeTicket>;
+  addUpdate(
+    employeeId: string,
+    number: string,
+    content: TicketContent,
+    idempotencyKey: string,
+  ): Promise<EmployeeTicket>;
+  reopen(
+    employeeId: string,
+    number: string,
+    content: TicketContent,
+    idempotencyKey: string,
+  ): Promise<EmployeeTicket>;
 }

@@ -38,6 +38,10 @@ Ana recebe os três chamados do Anexo B (`INC-20311`, `REQ-10442`, `INC-20150`) 
 
 O ponto de entrada do legado simulado é `ticketService`, em `src/services/tickets/index.ts`, com contrato `TicketService`: `list(employeeId, { statuses? })` e `get(employeeId, number)`. O funcionário deve vir da sessão autenticada, nunca do modelo. Toda consulta filtra o proprietário no banco; número alheio e inexistente retornam `null`, e identidade ausente é rejeitada. Sem filtro de status, a lista inclui todos os chamados próprios, dos mais recentes aos mais antigos pela abertura. O retorno inclui `dueAt` e `isOverdue`, calculados na leitura sem alterar as datas persistidas. O adaptador SQLite e seu relógio podem ser substituídos sem alterar o contrato.
 
+`ticketDraftService` persiste rascunhos completos de criação, complemento e reabertura, com estados pendente, confirmado, cancelado ou falhou. `confirmTicketDraft` e `cancelTicketDraft` (`tickets/confirmation.ts`) obtêm a identidade da sessão; não usam LLM. A confirmação revalida conversa e alvo, e grava alteração, chave de idempotência e resultado do rascunho em uma transação. Cancelados/falhos não podem ser confirmados; é necessário um novo rascunho. Repetir uma confirmação concluída devolve o mesmo chamado.
+
+As escritas do legado (`create`, `addUpdate`, `reopen`) exigem chave de idempotência: a confirmação usa o id do rascunho. Chave repetida com conteúdo diferente é rejeitada. Complementos preservam a descrição anterior e reiniciam `lastUpdatedAt`; o tipo INC/REQ de um chamado existente não muda. A numeração nova começa em 100001 por tipo, em contador transacional separado da faixa dos exemplos. Estas funções ainda não têm rota HTTP ou interface.
+
 ## Verificações
 
 ```sh
