@@ -34,7 +34,18 @@ test.each([false, true])(
         confidence: "alta",
         reason: "Pedido explícito",
       },
-      [],
+      [
+        {
+          tool: "get_ticket",
+          input: { number: "INC-20311" },
+          result: {
+            status: "success",
+            articleIds: [],
+            summary:
+              "INC-20311: notebook, WAITING_FOR_ANALYST, prazo 2026-11-01T12:00:00.000Z, vencido",
+          },
+        },
+      ],
     );
     const result = await f.db.$transaction((tx) =>
       handoffConversation(
@@ -55,6 +66,15 @@ test.each([false, true])(
     expect(c.status).toBe("WAITING_FOR_ANALYST");
     expect(c.transferSummary).toContain(message.content);
     expect(c.transferSummary).toContain("INC-20311");
+    expect(c.transferSummary).toContain("O que o funcionário relatou\n");
+    expect(c.transferSummary).toContain(
+      "O que o assistente verificou\n- Verificou o chamado",
+    );
+    expect(c.transferSummary).toContain("Status na transferência:");
+    expect(c.transferSummary).toContain("Prazo:");
+    expect(c.transferSummary).not.toMatch(
+      /get_ticket|list_tickets|consultar_chamados|WAITING_FOR_ANALYST|T12:00/,
+    );
     expect(record.executedActions).toHaveLength(unavailable ? 1 : 2);
     expect(await f.db.ticketOperation.count()).toBe(unavailable ? 0 : 1);
     if (unavailable)
