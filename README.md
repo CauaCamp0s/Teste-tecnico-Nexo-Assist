@@ -2,6 +2,8 @@
 
 ### Transferência e disponibilidade do legado
 
+Quando a confirmação esgota as tentativas por `TicketUnavailableError`, o rascunho permanece `PENDING`, com `failureCode: UNAVAILABLE`, permitindo nova confirmação após a recuperação. Uma confirmação bem-sucedida limpa o código de falha; erros definitivos continuam marcando `FAILED`.
+
 `transfer(employeeId, number, summary, idempotencyKey)` encaminha um chamado próprio ativo para `WAITING_FOR_ANALYST`, persiste `transferSummary` e reinicia `lastUpdatedAt`. A chave persistida impede repetir a escrita após perda de resposta.
 
 `TICKET_SERVICE_OUTAGE_MS=0` desliga a simulação. Um inteiro positivo (por exemplo, `3000`) provoca uma única janela de indisponibilidade desde a primeira chamada do legado por processo; consultas e confirmações compartilham essa janela. Após o prazo, o serviço se recupera, sem reiniciar a janela a cada chamada. Reiniciar o processo reinicia a simulação.

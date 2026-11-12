@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { TicketError } from "./errors";
+import { TicketError, TicketUnavailableError } from "./errors";
 import { createTicketService } from "./service";
 import type { TicketService } from "./types";
 import { requireEmployeeId, ticketContentSchema } from "./validation";
@@ -175,7 +175,8 @@ export function createDraftService(
           await database.ticketDraft.updateMany({
             where: { id, employeeId, status: "PENDING" },
             data: {
-              status: "FAILED",
+              status:
+                error instanceof TicketUnavailableError ? "PENDING" : "FAILED",
               failureCode:
                 error instanceof TicketError ? error.code : "INTERNAL_ERROR",
             },

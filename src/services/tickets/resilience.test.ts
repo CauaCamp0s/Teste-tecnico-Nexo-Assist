@@ -155,6 +155,43 @@ test("esgotamento após escrita informa resultado potencialmente efetivado", asy
   expect(await f.db.ticketOperation.count()).toBe(1);
 });
 
+test("indisponibilidade mantém rascunho pendente e nova confirmação cria exatamente um chamado", async () => {
+  const fault = createTemporaryOutage("3000", () => f.clock().getTime());
+  const drafts = createDraftService(f.db, f.clock, (tx) =>
+    withTicketResilience(createTicketService(tx, f.clock), { fault, sleep }),
+  );
+  const draft = await drafts.create(f.ana, {
+    conversationId: f.conversationId,
+    kind: "CREATE",
+    content,
+  });
+  await expect(drafts.confirm(f.ana, draft.id)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+    attempts: 3,
+  });
+  expect(await drafts.get(f.ana, draft.id)).toMatchObject({
+    status: "PENDING",
+    failureCode: "UNAVAILABLE",
+  });
+  expect(await f.db.ticket.count()).toBe(9);
+  expect(await f.db.ticketOperation.count()).toBe(0);
+  f.setNow(new Date(f.clock().getTime() + 1500));
+  const result = await drafts.confirm(f.ana, draft.id);
+  expect(result.draft).toMatchObject({
+    status: "CONFIRMED",
+    failureCode: null,
+  });
+  expect((await drafts.confirm(f.ana, draft.id)).ticket.id).toBe(
+    result.ticket.id,
+  );
+  expect(await f.db.ticket.count()).toBe(10);
+  expect(await f.db.ticketOperation.count()).toBe(1);
+  expect(await f.db.ticketOperation.findFirst()).toMatchObject({
+    idempotencyKey: draft.id,
+    ticketId: result.ticket.id,
+  });
+});
+
 test.each([false, true])(
   "confirmação mantém atomicidade com falha persistente=%s",
   async (persistent) => {
@@ -177,7 +214,10 @@ test.each([false, true])(
       await expect(drafts.confirm(f.ana, draft.id)).rejects.toBeInstanceOf(
         TicketUnavailableError,
       );
-      expect((await drafts.get(f.ana, draft.id)).status).toBe("FAILED");
+      expect(await drafts.get(f.ana, draft.id)).toMatchObject({
+        status: "PENDING",
+        failureCode: "UNAVAILABLE",
+      });
     } else
       expect((await drafts.confirm(f.ana, draft.id)).draft.status).toBe(
         "CONFIRMED",
