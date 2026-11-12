@@ -439,7 +439,7 @@ test("timeout cancela a chamada e registra contingência", async () => {
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
     reason: expect.stringContaining(
-      "O modelo excedeu o limite de espera de 20 segundos.",
+      "O modelo excedeu seu orçamento de 18 segundos",
     ),
     consultations: [],
   });

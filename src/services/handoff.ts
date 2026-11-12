@@ -15,9 +15,10 @@ export async function handoffConversation(
   relatedNumber?: string | null,
   legacyUnavailable = false,
 ) {
-  const previousCards = messages.flatMap(
-    (m) => (m.payload as ChatPayload | null)?.tickets ?? [],
-  );
+  const previousCards = messages.flatMap((m) => {
+    const cards = (m.payload as ChatPayload | null)?.tickets;
+    return cards?.length === 1 ? cards : [];
+  });
   const number = relatedNumber ?? previousCards.at(-1)?.number;
   const related = number
     ? await tx.ticket.findFirst({ where: { employeeId, number } })

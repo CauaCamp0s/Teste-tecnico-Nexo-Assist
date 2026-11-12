@@ -10,6 +10,7 @@ export type TicketCard = Omit<
   dueAt: string | null;
 };
 export type DraftCard = {
+  failureCode?: string | null;
   id: string;
   kind: "CREATE" | "UPDATE" | "REOPEN";
   title: string;

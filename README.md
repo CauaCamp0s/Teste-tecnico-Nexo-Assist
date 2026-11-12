@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+O fluxo normal continua com até duas gerações; há reserva de 2 s do orçamento total de 20 s para persistência/backoff (geração limitada a 18 s). Recuperação de JSON e o único retry de 429/503 continuam excepcionais e dentro do mesmo orçamento. Alegações de escrita detectadas no texto livre são substituídas; as confirmações e encaminhamentos exibidos são redigidos pelo código após persistência. Não se transfere automaticamente o último item de uma lista ambígua. Uma referência resolvida fora da janela de reabertura pede autorização para preparar um novo chamado em vez de criar silenciosamente.
+
 Cada resposta mostra atividades observadas e um detalhe expansível com entendimento, fonte e resultado das consultas, decisão, ações realmente persistidas, regras (incluindo prioridade e SLA), segurança e motivo. O detalhe usa rótulos legíveis e listas, não JSON cru. Consultas não são apresentadas como alterações de estado, e falhas não recebem marca de execução bem-sucedida.
 
 Transferências: pedido explícito/aceite, contexto crítico calculado pelo código e segurança baixa encaminham a conversa e pausam o agent. Escopo externo continua sendo redirecionado. O resumo é montado com relatos, consultas/decisões persistidas e chamado próprio identificado. Se o legado esgotar tentativas, sua transação é desfeita e a conversa ainda entra na fila com aviso explícito de que o chamado não foi transferido. Chamados resolvidos/encerrados não são alterados ao encaminhar a conversa. Não se inventam equipe N1/N2 nem prazo de contato humano.
@@ -52,7 +54,9 @@ Trade-off atual: a primeira chamada decide buscar ou responder diretamente; redi
 
 Retries automáticos estão desabilitados, inclusive os processadores padrão do Mastra (`errorProcessorDefaults: false`). Na versão 1.82.0, o `StreamErrorRetryProcessor` repetia falhas até duas vezes com espera de 3 s, independentemente de `maxRetries: 0`. Agora o código permite apenas uma nova tentativa por mensagem após HTTP 503/429, com espera cancelável de 1 s; etapa, status, espera e resultado ficam em `modelRetries`, separados de `executedActions`.
 
-JSON inválido ou fora do schema permite uma chamada extra de recuperação, sem ferramentas e com os resultados reais já consultados. O fluxo normal mantém até duas chamadas; recuperação de JSON e retry de indisponibilidade podem acrescentar uma chamada cada, sempre dentro do orçamento compartilhado de 20 segundos. Falha persistente, indisponibilidade ou timeout produz pedido de detalhes com segurança baixa, motivo e `modelFailure` registrados. O timeout protege contra falhas e não representa uma meta de latência. A latência do nível gratuito varia; a busca no SQLite levou cerca de 2 ms.
+JSON inválido ou fora do schema permite uma chamada extra de recuperação, sem ferramentas e com os resultados reais já consultados. O fluxo normal mantém até duas chamadas; recuperação de JSON e retry de indisponibilidade podem acrescentar uma chamada cada, dentro do orçamento compartilhado. Falha persistente, indisponibilidade do modelo ou timeout produz encaminhamento humano com segurança baixa, motivo e `modelFailure` registrados. O timeout protege contra falhas e não representa uma meta de latência. A latência do nível gratuito varia.
+
+`src/agent/scenarios.test.ts` cobre ponta a ponta com modelo mockado e rede proibida: orientação por artigo, consulta/seleção, atraso/aceite, coleta até confirmação, duplicidade, reabertura elegível/expirada, pedido humano, criticidade, segurança baixa, fora de escopo, falhas e isolamento. Os testes de serviços complementam concorrência, limites, sessão/papel, rollback e perda de resposta. Rodadas reais são manuais, curtas e em SQLite temporário; sua saída não faz parte do repositório.
 
 ## Chamados e prazos
 

@@ -121,6 +121,8 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
+      "Não deduza quem é afetado só por 'meu notebook': se o funcionário não informou se é só ele/equipe/empresa, impact=null. Interrupção e compromisso no mesmo dia também precisam de evidência explícita no relato, senão null. " +
+      "Para qualquer pane coletiva ou interrupção total relatada, extraia proposal com o contexto de impacto/interrupção, mesmo com outros campos null, para o código avaliar criticidade. Se o usuário só disser olá, não é insegurança: peça o problema com confiança média. " +
       "Quando o funcionário pedir pessoa/analista ou aceitar oferta de transferência, handoff.requested=true e relatedNumber se houver chamado relacionado; recusa de oferta não é pedido. Nunca diga que transferiu/criou/atualizou/reabriu: o servidor executa e redige essas confirmações. Caso você não tenha segurança sobre como proceder, confidence=baixa para encaminhamento humano. " +
       "Se o funcionário quiser abrir/complementar/reabrir chamado, ou artigo exigir chamado, preencha proposal com TODOS os dados já informados no histórico, null para o que faltar. Não invente impacto ou urgência. INC = defeito; REQ = pedido. Nunca escolha prioridade: extraia impact (SELF/TEAM/COMPANY), interruption (stopped/degraded/none), sameDayCommitment. Faça no máximo uma pergunta. Antes de propor criação consulte find_duplicate_candidates, compare problema e descrição com resultados reais e preencha duplicate (same com número, different sem número, uncertain se dúvida). Uma seleção do funcionário resolve a dúvida. Se não for fluxo de chamado, proposal=null. Ao receber só a resposta a uma pergunta de coleta, continue a coleta com o histórico. Não use list_tickets para duplicidade: use find_duplicate_candidates. " +
       "Para consultar status de chamados, use list_tickets quando não houver número e get_ticket quando houver número ou seleção. Nunca use search_help_center para status de chamado. Você não recebe nem escolhe employeeId: as ferramentas já estão vinculadas ao funcionário. Não invente chamados, status ou datas. " +
@@ -132,11 +134,12 @@ export async function respondToConversation(
     },
   });
 
-  const abortSignal = AbortSignal.timeout(20_000);
+  // Reserva 2s do orçamento total para persistência e backoff do legado.
+  const abortSignal = AbortSignal.timeout(18_000);
   const modelRetries: ModelRetry[] = [];
   const runModel = createModelRetry(
     abortSignal,
-    performance.now() + 20_000,
+    performance.now() + 18_000,
     modelRetries,
   );
   async function validated<T>(
@@ -223,7 +226,7 @@ export async function respondToConversation(
     }
   } catch (error) {
     failureReason = abortSignal.aborted
-      ? "O modelo excedeu o limite de espera de 20 segundos."
+      ? "O modelo excedeu seu orçamento de 18 segundos (20 segundos para a resposta completa)."
       : error instanceof Error && error.message === "INVALID_MODEL_RESPONSE"
         ? "O modelo retornou JSON inválido ou fora do schema em duas tentativas."
         : "Não foi possível obter uma resposta válida do provedor do modelo.";
@@ -243,7 +246,7 @@ export async function respondToConversation(
         : "unavailable";
     decisionRecord.decision = "pedir_detalhes";
     decisionRecord.appliedRules.push(
-      "Falha do modelo: pedir detalhes com segurança baixa.",
+      "Falha do modelo: segurança baixa exige avaliação humana.",
     );
   } else if (
     decisionRecord.decision === "pedir_detalhes" &&
@@ -254,6 +257,18 @@ export async function respondToConversation(
   }
 
   const ticketPresentation = ticketTools.presentation(decisionRecord);
+  // Texto livre pode orientar, mas não é comprovante de uma operação.
+  if (
+    /\b(criei|criamos|criado|criada|abri|abrimos|aberto|aberta|atualizei|atualizamos|atualizado|atualizada|reabri|reaberto|transferi|transferido|transferida|encaminhei|encaminhado|encaminhada|cancelei|cancelado|created|transferred|updated)\b/i.test(
+      content,
+    )
+  ) {
+    content =
+      "Posso orientar você com os artigos consultados. Para alterar um chamado, prepare e confirme um rascunho no chat.";
+    decisionRecord.appliedRules.push(
+      "Afirmação de operação em texto livre substituída: somente o código pode confirmar uma ação persistida.",
+    );
+  }
   if (ticketPresentation && assessment.understanding.intent === "ti") {
     content = ticketPresentation.content;
     payload = ticketPresentation.payload;

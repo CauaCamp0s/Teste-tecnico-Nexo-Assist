@@ -18,7 +18,11 @@ async function refreshCards(tx: Prisma.TransactionClient, draft: TicketDraft) {
         data: {
           payload: {
             ...payload,
-            draft: { ...payload.draft, status: draft.status },
+            draft: {
+              ...payload.draft,
+              status: draft.status,
+              failureCode: draft.failureCode,
+            },
           },
         },
       });

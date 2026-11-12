@@ -17,6 +17,7 @@ export function createDraftFlow(
   tickets: TicketService,
   consultations: Consultation[],
   results: unknown[],
+  clock: () => Date = () => new Date(),
 ) {
   let candidates: EmployeeTicket[] | undefined;
   let unavailable = false;
@@ -136,6 +137,64 @@ export function createDraftFlow(
         (t) => t.number === proposal.duplicate?.number,
       );
       if (
+        proposal.duplicate?.relation === "same" &&
+        proposal.duplicate.number &&
+        !match
+      ) {
+        let target: EmployeeTicket | null;
+        try {
+          target = await tickets.get(employeeId, proposal.duplicate.number);
+        } catch (error) {
+          if (!(error instanceof TicketUnavailableError)) throw error;
+          consultations.push({
+            tool: "get_ticket",
+            input: { number: proposal.duplicate.number },
+            result: {
+              status: "error",
+              articleIds: [],
+              summary: "Serviço indisponível ao validar alvo.",
+            },
+          });
+          record.decision = "indisponivel";
+          return {
+            content:
+              "Não consegui validar esse chamado porque o serviço está indisponível. Tente novamente em instantes.",
+            payload: {},
+          };
+        }
+        consultations.push({
+          tool: "get_ticket",
+          input: { number: proposal.duplicate.number },
+          result: {
+            status: "success",
+            articleIds: [],
+            summary: target
+              ? `${target.number}: ${target.status}; fora dos candidatos elegíveis.`
+              : "Nenhum chamado próprio encontrado.",
+          },
+        });
+        record.decision = "pedir_detalhes";
+        record.appliedRules.push(
+          "Reabertura exige RESOLVED com resolução há no máximo 7 dias; alvo fora dos candidatos não autoriza criação automática.",
+        );
+        return {
+          content: target
+            ? "Esse chamado não pode ser reaberto na janela de até 7 dias. Quer preparar um novo chamado para este problema?"
+            : "Não encontrei esse chamado entre os seus. Qual chamado você quer complementar?",
+          payload: {
+            options: target
+              ? [
+                  {
+                    label: "Preparar novo chamado",
+                    value:
+                      "Quero um novo chamado, separado do anterior fora da janela de reabertura",
+                  },
+                ]
+              : [],
+          },
+        };
+      }
+      if (
         candidates?.length &&
         (!compared ||
           !proposal.duplicate ||
@@ -192,7 +251,7 @@ export function createDraftFlow(
               where: { id: target.id, employeeId },
             });
             if (!fresh) throw new Error("Chamado não encontrado.");
-            if (kind === "REOPEN") assertCanReopen(fresh, new Date());
+            if (kind === "REOPEN") assertCanReopen(fresh, clock());
             else if (["RESOLVED", "CLOSED"].includes(fresh.status))
               throw new Error("O chamado mudou de estado. Consulte novamente.");
           }
@@ -201,7 +260,7 @@ export function createDraftFlow(
             where: { employeeId, conversationId, status: "PENDING" },
             data: { status: "CANCELED" },
           });
-          const draft = await createDraftService(tx).create(employeeId, {
+          const draft = await createDraftService(tx, clock).create(employeeId, {
             conversationId,
             kind,
             targetNumber: target?.number,
@@ -221,7 +280,7 @@ export function createDraftFlow(
               createdAt: draft.createdAt,
               lastUpdatedAt: null,
             },
-            new Date(),
+            clock(),
           );
           record.appliedRules.push(
             `SLA previsto: ${sla.dueAt?.toISOString()}; recalculado na confirmação, calendário America/Sao_Paulo, dias úteis 08–18h (crítica: 1h corrida).`,

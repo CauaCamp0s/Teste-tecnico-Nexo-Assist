@@ -69,12 +69,18 @@ export function MessagePayload({
             <span>
               {payload.draft.status === "PENDING"
                 ? "Aguardando confirmação"
-                : payload.draft.status}
+                : payload.draft.status === "CONFIRMED"
+                  ? "Confirmado"
+                  : payload.draft.status === "CANCELED"
+                    ? "Cancelado"
+                    : "Falhou"}
             </span>
           </header>
           <h3>{payload.draft.title}</h3>
           <p>{payload.draft.description}</p>
           <dl>
+            <dt>Tipo</dt>
+            <dd>{payload.draft.type === "INC" ? "Incidente" : "Requisição"}</dd>
             <dt>Categoria</dt>
             <dd>{categoryLabels[payload.draft.category]}</dd>
             <dt>Prioridade</dt>
@@ -95,7 +101,9 @@ export function MessagePayload({
                 disabled={disabled}
                 onClick={() => onDraft(payload.draft!.id, "confirm")}
               >
-                Confirmar / Tentar novamente
+                {payload.draft.failureCode === "UNAVAILABLE"
+                  ? "Tentar novamente"
+                  : "Confirmar"}
               </button>
               <button
                 type="button"

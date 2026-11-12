@@ -45,6 +45,7 @@ function setup() {
       createTicketService(f.db, f.clock),
       record.consultations,
       [],
+      f.clock,
     ),
   };
 }
