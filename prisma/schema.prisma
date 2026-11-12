@@ -26,6 +26,42 @@ enum MessageRole {
   SYSTEM
 }
 
+enum TicketType {
+  INC
+  REQ
+}
+
+enum TicketCategory {
+  ACCESS
+  NETWORK_VPN
+  HARDWARE
+  SOFTWARE
+  EMAIL
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  WAITING_FOR_ANALYST
+  IN_PROGRESS
+  APPROVED
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TicketImpact {
+  SELF
+  TEAM
+  COMPANY
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -35,6 +71,7 @@ model User {
   conversations Conversation[]
   messages      Message[]
   sessions      Session[]
+  tickets       Ticket[]
 }
 
 model Session {
@@ -82,4 +119,24 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt, id])
+}
+
+model Ticket {
+  id            String         @id @default(cuid())
+  number        String         @unique
+  employeeId    String
+  employee      User           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  type          TicketType
+  category      TicketCategory
+  status        TicketStatus   @default(OPEN)
+  priority      TicketPriority
+  impact        TicketImpact
+  title         String
+  description   String
+  createdAt     DateTime       @default(now())
+  lastUpdatedAt DateTime?
+  resolvedAt    DateTime?
+
+  @@index([employeeId, status])
+  @@index([employeeId, createdAt])
 }

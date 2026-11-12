@@ -107,3 +107,33 @@ test("o banco rejeita mensagens sem conversa e conversas sem proprietário", asy
     db.conversation.create({ data: { employeeId: "inexistente" } }),
   ).rejects.toMatchObject({ code: "P2003" });
 });
+
+test("chamado persiste proprietário e classificação, com número único e vínculo obrigatório", async () => {
+  const employee = await db.user.create({
+    data: { name: "Titular", email: "ticket@nexo.com.br" },
+  });
+  const data = {
+    number: "INC-99999",
+    employeeId: employee.id,
+    type: "INC" as const,
+    category: "NETWORK_VPN" as const,
+    priority: "CRITICAL" as const,
+    impact: "TEAM" as const,
+    title: "VPN parada para a equipe",
+    description: "Toda a equipe está sem acesso à VPN.",
+    lastUpdatedAt: new Date("2026-11-09T10:00:00-03:00"),
+  };
+  const ticket = await db.ticket.create({ data });
+  await expect(db.ticket.create({ data })).rejects.toMatchObject({
+    code: "P2002",
+  });
+  await expect(
+    db.ticket.create({
+      data: { ...data, number: "INC-99998", employeeId: "inexistente" },
+    }),
+  ).rejects.toMatchObject({ code: "P2003" });
+  await db.$disconnect();
+  expect(
+    await db.ticket.findUnique({ where: { id: ticket.id } }),
+  ).toMatchObject({ ...data, status: "OPEN" });
+});

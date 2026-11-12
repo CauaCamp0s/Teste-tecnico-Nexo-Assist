@@ -28,6 +28,12 @@ Retries automáticos estão desabilitados, inclusive os processadores padrão do
 
 JSON inválido ou fora do schema permite uma chamada extra de recuperação, sem ferramentas e com os resultados reais já consultados. O fluxo normal mantém até duas chamadas; recuperação de JSON e retry de indisponibilidade podem acrescentar uma chamada cada, sempre dentro do orçamento compartilhado de 20 segundos. Falha persistente, indisponibilidade ou timeout produz pedido de detalhes com segurança baixa, motivo e `modelFailure` registrados. O timeout protege contra falhas e não representa uma meta de latência. A latência do nível gratuito varia; a busca no SQLite levou cerca de 2 ms.
 
+## Chamados e prazos
+
+O módulo `src/services/tickets` concentra as regras do sistema legado simulado, separado do agent. Chamados INC/REQ têm proprietário, categoria, impacto, prioridade, status e datas persistidas. A classificação usa impacto e interrupção (`stopped`: sem conseguir trabalhar; `degraded`: há alternativa; `none`: pedido/melhoria) e compromisso no mesmo dia. Paralisação de equipe/empresa é crítica; de uma pessoa ou compromisso hoje é alta; trabalho prejudicado com alternativa é média; pedidos sem urgência são baixa.
+
+O SLA usa `America/Sao_Paulo`, segunda a sexta das 8h às 18h, sem feriados: crítica = 1 hora corrida; alta = 4 horas úteis; média = 30 horas úteis (3 dias); baixa = 50 horas úteis (5 dias). `createdAt` inicia a primeira resposta; cada atualização de negócio define `lastUpdatedAt` e reinicia o prazo. A data não muda automaticamente ao salvar metadados. Vencido significa `agora > prazo`; resolvidos e encerrados não têm prazo pendente. O cálculo usa Temporal para respeitar o fuso IANA, sem depender do fuso da máquina.
+
 ## Verificações
 
 ```sh
