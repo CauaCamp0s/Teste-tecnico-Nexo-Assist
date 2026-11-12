@@ -111,6 +111,9 @@ export function ChatView({
       const result = await requestReply(conversationId, messageId);
       if (result.message) append(result.message);
       else setError(result.error);
+      const latest = await refreshConversation(conversationId);
+      setMessages(latest.messages);
+      setCurrentStatus(latest.status);
     } catch {
       setError(
         "A conexão foi interrompida. Sua mensagem está salva. Tente obter a resposta novamente ou atualize a conversa.",

@@ -13,6 +13,10 @@ export const assessmentSchema = z.object({
 export const answerSchema = assessmentSchema.extend({
   answer: z.string().min(1),
   proposal: proposalSchema.nullable().optional(),
+  handoff: z
+    .object({ requested: z.boolean(), relatedNumber: z.string().nullable() })
+    .nullable()
+    .optional(),
 });
 
 export type Consultation = {

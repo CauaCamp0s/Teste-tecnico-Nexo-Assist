@@ -167,12 +167,18 @@ test.each(["alta", "média", "baixa"])(
     );
     const record = message.decisionRecord as unknown as DecisionRecord;
     expect(record.consultations[0].result.articleIds).toEqual([]);
-    expect(record.executedActions).toEqual([]);
+    expect(record.executedActions).toHaveLength(confidence === "baixa" ? 1 : 0);
     expect(record.confidence).toBe(
       confidence === "alta" ? "média" : confidence,
     );
-    expect(record.decision).toBe("pedir_detalhes");
-    expect(message.content).toContain("Não tenho informações suficientes");
+    expect(record.decision).toBe(
+      confidence === "baixa" ? "transferir" : "pedir_detalhes",
+    );
+    expect(message.content).toContain(
+      confidence === "baixa"
+        ? "Encaminhei"
+        : "Não tenho informações suficientes",
+    );
     if (confidence === "alta")
       expect(record.appliedRules).toContain(
         "Sem artigo relevante consultado, a segurança é limitada a média.",
@@ -269,7 +275,7 @@ test("não executa o modelo para conversa de outro funcionário ou pausada", asy
   expect(model.doGenerateCalls).toHaveLength(0);
 });
 
-test("pede esclarecimento sem buscar quando a intenção é indefinida", async () => {
+test("encaminha sem buscar quando o modelo não tem segurança", async () => {
   const model = new MastraLanguageModelV2Mock({
     doGenerate: text({
       ...assessment,
@@ -279,7 +285,7 @@ test("pede esclarecimento sem buscar quando a intenção é indefinida", async (
   });
   const message = await respond(employeeId, conversationId, model);
   const record = message.decisionRecord as unknown as DecisionRecord;
-  expect(record.decision).toBe("pedir_detalhes");
+  expect(record.decision).toBe("transferir");
   expect(record.confidence).toBe("baixa");
   expect(record.consultations).toEqual([]);
   expect(model.doGenerateCalls).toHaveLength(1);
@@ -353,13 +359,15 @@ test.each(["json", "schema"])(
     const record = message.decisionRecord as unknown as DecisionRecord;
     expect(model.doGenerateCalls).toHaveLength(3);
     expect(record).toMatchObject({
-      decision: "pedir_detalhes",
+      decision: "transferir",
       confidence: "baixa",
-      executedActions: [],
+      executedActions: [
+        "Encaminhou a conversa para a fila de analistas e pausou o agent.",
+      ],
     });
     expect(record.reason).toContain("duas tentativas");
     expect(record.consultations).toHaveLength(1);
-    expect(message.content).toContain("Pode detalhar");
+    expect(message.content).toContain("Encaminhei");
     expect(
       (await db.message.findUniqueOrThrow({ where: { id: message.id } }))
         .decisionRecord,
@@ -398,7 +406,7 @@ test("falha de transporte não dispara retry e persiste segurança baixa", async
   expect(model.doGenerateCalls).toHaveLength(1);
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
-    decision: "pedir_detalhes",
+    decision: "transferir",
     consultations: [],
   });
 });
@@ -410,7 +418,7 @@ test("resposta direta inválida tenta novamente sem consultar artigos", async ()
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
     consultations: [],
-    decision: "pedir_detalhes",
+    decision: "transferir",
   });
 });
 
@@ -430,7 +438,9 @@ test("timeout cancela a chamada e registra contingência", async () => {
   expect(model.doGenerateCalls).toHaveLength(1);
   expect(message.decisionRecord).toMatchObject({
     confidence: "baixa",
-    reason: "O modelo excedeu o limite de espera de 20 segundos.",
+    reason: expect.stringContaining(
+      "O modelo excedeu o limite de espera de 20 segundos.",
+    ),
     consultations: [],
   });
 }, 30_000);

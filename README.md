@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Transferências: pedido explícito/aceite, contexto crítico calculado pelo código e segurança baixa encaminham a conversa e pausam o agent. Escopo externo continua sendo redirecionado. O resumo é montado com relatos, consultas/decisões persistidas e chamado próprio identificado. Se o legado esgotar tentativas, sua transação é desfeita e a conversa ainda entra na fila com aviso explícito de que o chamado não foi transferido. Chamados resolvidos/encerrados não são alterados ao encaminhar a conversa. Não se inventam equipe N1/N2 nem prazo de contato humano.
+
 Confirmar/Cancelar são server actions sem geração de modelo. Alteração, ledger de idempotência, resultado no histórico e atualização dos cards são atômicos. Repetir o mesmo botão devolve a mesma mensagem de resultado. Indisponibilidade preserva PENDING e informa que a tentativa não foi confirmada; erros definitivos exigem revisão. Os botões determinísticos continuam disponíveis ao atingir 30 mensagens (não consomem nova mensagem do funcionário).
 
 Coleta: o modelo extrai dados do histórico; o código pergunta um campo ausente por vez e calcula prioridade com `classifyTicketPriority`. O modelo compara candidatos consultados; sem consulta anterior ou com correspondência incerta, o servidor pede seleção. Um problema correspondente ativo vira complemento; resolvido elegível vira oferta de reabertura no card. Revisar dados cancela o rascunho pendente anterior e cria outro atomicamente com a resposta. O prazo no rascunho é uma previsão, recalculada na confirmação, não promessa de atendimento antes de uma reunião.
