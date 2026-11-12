@@ -23,6 +23,7 @@ import { createEmployeeTicketTools } from "./ticket-tools";
 import type { ChatPayload } from "@/services/chat-payload";
 import { createDraftFlow } from "./draft-flow";
 import type { TicketProposal } from "./proposal";
+import { establishedTicketNumbers } from "./ticket-context";
 
 function configuredModel(): MastraModelConfig {
   const model = process.env.LLM_MODEL;
@@ -80,11 +81,8 @@ export async function respondToConversation(
     .slice(0, conversation.messages.indexOf(latestEmployee!))
     .findLast((message) => message.role === "AGENT");
   const previousPayload = previousAgent?.payload as ChatPayload | null;
-  const hasActiveTicketContext = conversation.messages.some((message) =>
-    (message.payload as ChatPayload | null)?.tickets?.some(
-      (ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status),
-    ),
-  );
+  const establishedNumbers = establishedTicketNumbers(conversation.messages);
+  const hasActiveTicketContext = establishedNumbers.size > 0;
   const selection = latestEmployee?.content.trim();
   const offered =
     previousPayload?.pendingProposal &&
@@ -126,6 +124,8 @@ export async function respondToConversation(
     ticketService,
     consultations,
     searchResults,
+    undefined,
+    establishedNumbers,
   );
   const ticketTools = createEmployeeTicketTools(
     employeeId,
@@ -181,7 +181,8 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
-      "História de complemento: se o funcionário acrescentar um teste, resultado ou detalhe sobre um chamado ativo já citado/confirmado ou identificado nos candidatos, preencha ticketUpdate={number} mesmo sem pedido literal de atualizar. Exemplo: após criar 'Monitor não liga', 'O monitor continua sem ligar, testei em outra tomada e também não funcionou' é complemento do mesmo chamado. Não trate como dúvida da central nem peça novamente impacto/interrupção. O código usa a nova mensagem como descrição, reaproveita a classificação do chamado e monta UPDATE para confirmação. Se não souber o número, planeje find_duplicate_candidates e escolha somente uma correspondência segura; se ambíguo, peça seleção. Consulta de status, agradecimento e problema diferente não são complemento. " +
+      `Alvos estabelecidos pelo funcionário ou por uma escrita confirmada nesta conversa: ${JSON.stringify([...establishedNumbers])}. Só estes podem receber complemento automático, sempre após validação de proprietário e estado. Um chamado apenas listado como candidato em pergunta não respondida NÃO é o alvo do relato. Se não houver alvo estabelecido, preencha proposal com os dados do problema; nunca copie a categoria de um candidato incompatível. Duplicidade considera mesma categoria ou possibleRelatedNumbers com números explicitamente avaliados como possivelmente relacionados pelo conteúdo. Não inclua candidatos só porque pertencem ao funcionário. ` +
+      "História de complemento: se o funcionário acrescentar um teste, resultado ou detalhe sobre um chamado ativo estabelecido nesta conversa, preencha ticketUpdate={number} mesmo sem pedido literal de atualizar. Exemplo: após criar e confirmar 'Monitor não liga', 'O monitor continua sem ligar, testei em outra tomada e também não funcionou' é complemento do mesmo chamado. Não trate como dúvida da central nem peça novamente impacto/interrupção. O código usa a nova mensagem como descrição, reaproveita a classificação do chamado e monta UPDATE para confirmação. Se só houver candidatos, planeje find_duplicate_candidates e preencha proposal com o problema real; o funcionário precisa selecionar o alvo antes do complemento. Consulta de status, agradecimento e problema diferente não são complemento. " +
       "Primeiro classifique a intenção e proponha consultas em consultationPlan (no máximo duas). Não chame ferramentas diretamente. Cada entrada tem tool e query para search_help_center, subject opcional para list_tickets, number para get_ticket; find_duplicate_candidates não precisa de campos adicionais. Fora de TI, consultationPlan deve ser vazio. O servidor valida o escopo ANTES de executar qualquer consulta. Após receber resultados, responda sem planejar novas consultas. " +
       "Preencha helpOutcome: question quando faltar condição do artigo, guidance ao orientar, ticket_required somente quando a condição do artigo exige chamado, not_applicable se o artigo não se aplica. Não marque ticket_required apenas porque houve uma falha de equipamento. " +
       "Priorize resolução sem fila. Para um problema de TI, consulte a central antes de iniciar coleta de chamado. Com artigo relevante, oriente primeiro e respeite suas condições: VPN 809 exige perguntar Windows 10 ou 11; no 10 oriente os passos, no 11 o artigo exige chamado. proposal=null enquanto faltar condição do artigo ou houver orientação aplicável ainda não tentada. Só inicie coleta quando houver pedido explícito de chamado, orientação sem resultado ou artigo inaplicável/exigindo chamado. " +
@@ -357,12 +358,14 @@ export async function respondToConversation(
     if ("ticketUpdate" in answer && answer.ticketUpdate && latestEmployee) {
       proposal = {
         title: null,
-        description: latestEmployee.content,
         type: null,
         category: null,
         impact: null,
         interruption: null,
         sameDayCommitment: null,
+        ...(answer.proposal ?? previousPayload?.pendingProposal),
+        // Contexto do problema vem da coleta, nunca do alvo sugerido pelo modelo.
+        description: latestEmployee.content,
         duplicate: { relation: "same", number: answer.ticketUpdate.number },
       };
     }

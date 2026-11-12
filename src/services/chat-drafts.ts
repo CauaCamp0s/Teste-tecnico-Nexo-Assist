@@ -4,6 +4,7 @@ import { createTicketService } from "./tickets/service";
 import type { TicketService } from "./tickets/types";
 import { TicketError, TicketUnavailableError } from "./tickets/errors";
 import { buildDecisionRecord } from "@/agent/decisions";
+import { establishedTicketNumbers } from "@/agent/ticket-context";
 import { ticketCard, type ChatPayload } from "./chat-payload";
 
 async function refreshCards(tx: Prisma.TransactionClient, draft: TicketDraft) {
@@ -94,6 +95,22 @@ export function createChatDraftService(
         let content: string;
         let changed: TicketDraft;
         if (action === "confirm") {
+          if (draft.kind === "UPDATE") {
+            const target = await tx.ticket.findFirst({
+              where: { id: draft.targetTicketId ?? "", employeeId },
+            });
+            const history = await tx.message.findMany({
+              where: { conversationId, conversation: { employeeId } },
+            });
+            if (
+              !target ||
+              !establishedTicketNumbers(history).has(target.number)
+            )
+              throw new TicketError(
+                "INVALID_STATE",
+                "Selecione o chamado nesta conversa antes de confirmar o complemento.",
+              );
+          }
           const result = await drafts.confirm(employeeId, draftId);
           changed = result.draft;
           const verb =

@@ -10,6 +10,10 @@ export const proposalSchema = z.object({
   impact: z.enum(["SELF", "TEAM", "COMPANY"]).nullable(),
   interruption: z.enum(["stopped", "degraded", "none"]).nullable(),
   sameDayCommitment: z.boolean().nullable(),
+  possibleRelatedNumbers: z
+    .array(z.string().regex(/^(INC|REQ)-\d+$/))
+    .max(20)
+    .optional(),
   duplicate: z
     .object({
       relation: z.enum(["same", "different", "uncertain"]),

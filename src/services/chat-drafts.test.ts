@@ -75,3 +75,36 @@ test("não confirma rascunho de outro funcionário ou outra conversa; cancelar n
   ).toEqual([]);
   expect(await f.db.ticket.count()).toBe(9);
 });
+
+test("rascunho antigo de complemento sem vínculo com esta conversa não altera o chamado", async () => {
+  await f.db.message.create({
+    data: {
+      conversationId: f.otherConversationId,
+      role: "EMPLOYEE",
+      content: "É o mesmo problema do INC-20311",
+    },
+  });
+  const pending = await createDraftService(f.db).create(f.ana, {
+    conversationId: f.conversationId,
+    kind: "UPDATE",
+    targetNumber: "INC-20311",
+    content,
+  });
+  const before = await f.db.ticket.findUniqueOrThrow({
+    where: { number: "INC-20311" },
+  });
+  const result = await createChatDraftService(f.db)(
+    f.ana,
+    f.conversationId,
+    pending.id,
+    "confirm",
+  );
+  expect(
+    (result.decisionRecord as unknown as DecisionRecord).executedActions,
+  ).toEqual([]);
+  expect(await f.db.ticketOperation.count()).toBe(0);
+  expect(
+    (await f.db.ticket.findUniqueOrThrow({ where: { id: before.id } }))
+      .description,
+  ).toBe(before.description);
+});

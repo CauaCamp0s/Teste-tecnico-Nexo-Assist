@@ -18,6 +18,7 @@ export function createDraftFlow(
   consultations: Consultation[],
   results: unknown[],
   clock: () => Date = () => new Date(),
+  establishedNumbers: ReadonlySet<string> = new Set(),
 ) {
   let candidates: EmployeeTicket[] | undefined;
   let unavailable = false;
@@ -58,6 +59,40 @@ export function createDraftFlow(
       return { unavailable: true };
     }
   }
+  function plausibleCandidates(proposal: TicketProposal) {
+    return (candidates ?? []).filter(
+      (ticket) =>
+        ticket.category === proposal.category ||
+        proposal.possibleRelatedNumbers?.includes(ticket.number),
+    );
+  }
+  function askSelection(
+    proposal: TicketProposal,
+    choices: EmployeeTicket[],
+    record: DecisionRecord,
+  ) {
+    record.decision = "pedir_detalhes";
+    record.appliedRules.push(
+      "Correspondência incerta: perguntar antes de criar para evitar duplicidade.",
+    );
+    return {
+      content: "Algum destes chamados trata do mesmo problema?",
+      payload: {
+        pendingProposal: { ...proposal, duplicate: null },
+        tickets: choices.map(ticketCard),
+        options: [
+          ...choices.map((ticket) => ({
+            label: `${ticket.number} · ${ticket.title}`,
+            value: `É o mesmo problema do ${ticket.number}`,
+          })),
+          {
+            label: "É outro problema",
+            value: "É outro problema, diferente desses chamados",
+          },
+        ],
+      } as ChatPayload,
+    };
+  }
   return {
     tool: createTool({
       id: "find_duplicate_candidates",
@@ -71,6 +106,32 @@ export function createDraftFlow(
       record: DecisionRecord,
       selected = false,
     ) {
+      if (
+        proposal.duplicate?.relation === "same" &&
+        proposal.duplicate.number &&
+        !establishedNumbers.has(proposal.duplicate.number)
+      ) {
+        if (candidates === undefined && !unavailable) await lookup();
+        record.appliedRules.push(
+          "Alvo sugerido rejeitado: candidato não selecionado nem citado pelo funcionário e sem escrita confirmada nesta conversa.",
+        );
+        if (unavailable) {
+          record.decision = "indisponivel";
+          return {
+            content:
+              "Não consegui verificar os chamados para identificar o alvo. Tente novamente em instantes.",
+            payload: {} as ChatPayload,
+          };
+        }
+        const choices = plausibleCandidates(proposal);
+        if (choices.length) return askSelection(proposal, choices, record);
+        // Sem correspondência plausível, continuar a coleta/criação do problema.
+        // Não herdar nenhum atributo do chamado sugerido e rejeitado.
+        proposal = {
+          ...proposal,
+          duplicate: { relation: "different", number: null },
+        };
+      }
       let existingUpdate: EmployeeTicket | undefined;
       if (
         proposal.duplicate?.relation === "same" &&
@@ -263,34 +324,15 @@ export function createDraftFlow(
           },
         };
       }
+      const plausible = plausibleCandidates(proposal);
       if (
-        candidates?.length &&
+        plausible.length &&
         ((!compared && !selected && proposal.duplicate?.relation !== "same") ||
           !proposal.duplicate ||
           proposal.duplicate.relation === "uncertain" ||
           (proposal.duplicate.relation === "same" && !match))
       ) {
-        record.decision = "pedir_detalhes";
-        record.appliedRules.push(
-          "Correspondência incerta: perguntar antes de criar para evitar duplicidade.",
-        );
-        return {
-          content: "Algum destes chamados trata do mesmo problema?",
-          payload: {
-            pendingProposal: proposal,
-            tickets: candidates.map(ticketCard),
-            options: [
-              ...candidates.map((ticket) => ({
-                label: `${ticket.number} · ${ticket.title}`,
-                value: `É o mesmo problema do ${ticket.number}`,
-              })),
-              {
-                label: "É outro problema",
-                value: "É outro problema, diferente desses chamados",
-              },
-            ],
-          },
-        };
+        return askSelection(proposal, plausible, record);
       }
       const target =
         proposal.duplicate?.relation === "same" ? match : undefined;
@@ -317,6 +359,10 @@ export function createDraftFlow(
         payload: {} as ChatPayload,
         persist: async (tx: Prisma.TransactionClient): Promise<ChatPayload> => {
           if (target) {
+            if (!establishedNumbers.has(target.number))
+              throw new Error(
+                "Selecione o chamado antes de preparar o complemento.",
+              );
             const fresh = await tx.ticket.findFirst({
               where: { id: target.id, employeeId },
             });
@@ -361,6 +407,7 @@ export function createDraftFlow(
             `Persistiu rascunho ${draft.id} de ${kind}; nenhum chamado alterado.`,
           );
           return {
+            pendingProposal: proposal,
             draft: {
               id: draft.id,
               kind,

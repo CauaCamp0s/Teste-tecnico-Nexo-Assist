@@ -28,7 +28,7 @@ const proposal: TicketProposal = {
   sameDayCommitment: true,
   duplicate: { relation: "different", number: null },
 };
-function setup() {
+function setup(established: string[] = []) {
   const record = buildDecisionRecord(
     {
       understanding: { intent: "ti", summary: "VPN falha" },
@@ -46,6 +46,7 @@ function setup() {
       record.consultations,
       [],
       f.clock,
+      new Set(established),
     ),
   };
 }
@@ -69,7 +70,7 @@ test("sem comparação observada, pede seleção; prioridade vem do código", as
 test.each([null, "INC-20312", "INC-20150"])(
   "persiste operação correta para candidato %s",
   async (number) => {
-    const { record, flow } = setup();
+    const { record, flow } = setup(number ? [number] : []);
     await flow.tool.execute!({}, {} as never);
     const result = await flow.prepare(
       {

@@ -369,6 +369,127 @@ test("Bruno cria monitor e acrescenta teste na mesma conversa: UPDATE sem repeti
   expect(addUpdate).toHaveBeenCalledTimes(1);
 });
 
+test("Bruno relata monitor parado: candidato de e-mail é descartado e criação é proposta diretamente", async () => {
+  const result = await turn(
+    "Meu monitor não liga desde hoje cedo. Já troquei o cabo de força e nada. Só eu estou afetado e não consigo trabalhar.",
+    {
+      ...assessment,
+      helpOutcome: "not_applicable",
+      proposal: {
+        ...complete,
+        title: "Monitor não liga",
+        description:
+          "Monitor não liga desde hoje cedo, mesmo após trocar o cabo de força.",
+        category: "HARDWARE",
+        sameDayCommitment: null,
+        duplicate: { relation: "uncertain", number: null },
+      },
+    },
+    { name: "find_duplicate_candidates", input: {} },
+    { employeeId: f.bruno, conversationId: f.otherConversationId },
+  );
+  expect(result.payload.draft, result.message.content).toMatchObject({
+    kind: "CREATE",
+    category: "HARDWARE",
+    priority: "HIGH",
+  });
+  expect(result.payload.tickets).toBeUndefined();
+  expect(result.message.content).not.toContain("mesmo problema");
+  expect(result.payload.options).toBeUndefined();
+  expect(await f.db.ticketOperation.count()).toBe(0);
+});
+
+test.each(["ticketUpdate", "duplicate"])(
+  "%s não autoriza complementar e-mail exibido apenas em pergunta não respondida sobre monitor",
+  async (mode) => {
+    const email = await services.ticketService.get(f.bruno, "INC-20315");
+    const monitor = {
+      ...complete,
+      title: "Monitor não liga",
+      description:
+        "Monitor não liga desde hoje cedo. Cabo de força trocado sem sucesso.",
+      category: "HARDWARE" as const,
+      sameDayCommitment: null,
+      duplicate: null,
+    };
+    // Histórico anterior à correção: o candidato incompatível foi exibido, não escolhido.
+    await f.db.message.create({
+      data: {
+        conversationId: f.otherConversationId,
+        role: "EMPLOYEE",
+        content:
+          "Meu monitor não liga desde hoje cedo. Já troquei o cabo de força e nada. Só eu estou afetado e não consigo trabalhar.",
+      },
+    });
+    await f.db.message.create({
+      data: {
+        conversationId: f.otherConversationId,
+        role: "AGENT",
+        content: "Algum destes chamados trata do mesmo problema?",
+        payload: {
+          pendingProposal: monitor,
+          tickets: [JSON.parse(JSON.stringify(email))],
+          options: [
+            {
+              label: "INC-20315 · E-mail indisponível para a equipe comercial",
+              value: "É o mesmo problema do INC-20315",
+            },
+            {
+              label: "É outro problema",
+              value: "É outro problema, diferente desses chamados",
+            },
+          ],
+        },
+      },
+    });
+    const information =
+      "O monitor continua sem ligar, testei em outra tomada e também não funcionou.";
+    const result = await turn(
+      information,
+      {
+        ...assessment,
+        ...(mode === "ticketUpdate"
+          ? { ticketUpdate: { number: "INC-20315" } }
+          : {
+              proposal: {
+                ...monitor,
+                description: information,
+                duplicate: { relation: "same", number: "INC-20315" },
+              },
+            }),
+      },
+      undefined,
+      { employeeId: f.bruno, conversationId: f.otherConversationId },
+    );
+    expect(result.record.appliedRules.join(" ")).toContain(
+      "Alvo sugerido rejeitado",
+    );
+    expect(result.payload.draft).toMatchObject({
+      kind: "CREATE",
+      category: "HARDWARE",
+      priority: "HIGH",
+      description: information,
+    });
+    expect(result.payload.tickets).toBeUndefined();
+    const stored = await f.db.ticketDraft.findUniqueOrThrow({
+      where: { id: result.payload.draft!.id },
+    });
+    expect(stored.targetTicketId).toBeNull();
+    await createChatDraftService(f.db)(
+      f.bruno,
+      f.otherConversationId,
+      stored.id,
+      "confirm",
+    );
+    expect(
+      (await services.ticketService.get(f.bruno, "INC-20315"))?.description,
+    ).toBe(email!.description);
+    expect(
+      await f.db.ticketOperation.count({ where: { kind: "UPDATE" } }),
+    ).toBe(0);
+  },
+);
+
 test("sem busca de artigos não substitui uma pergunta contextual por contingência da central", async () => {
   const result = await turn("Quero acrescentar informações ao meu chamado", {
     ...assessment,
@@ -377,33 +498,48 @@ test("sem busca de artigos não substitui uma pergunta contextual por contingên
   expect(result.message.content).toBe("Qual informação você quer acrescentar?");
 });
 
-test("complemento identificado nos candidatos reaproveita classificação sem coletar impacto", async () => {
+test("candidato plausível só recebe complemento depois da seleção do funcionário", async () => {
   const original = await f.db.ticket.findUniqueOrThrow({
     where: { number: "INC-20311" },
   });
   const information = "Testei reiniciar o notebook, mas continua lento.";
   const result = await turn(
     information,
-    { ...assessment, ticketUpdate: { number: original.number } },
+    {
+      ...assessment,
+      ticketUpdate: { number: original.number },
+      proposal: { ...complete, title: original.title, category: "HARDWARE" },
+    },
     { name: "find_duplicate_candidates", input: {} },
   );
-  expect(result.payload.draft).toMatchObject({
+  expect(result.payload.draft).toBeUndefined();
+  expect(
+    result.payload.options?.some(
+      (option) => option.value === `É o mesmo problema do ${original.number}`,
+    ),
+  ).toBe(true);
+  const selected = await turn(`É o mesmo problema do ${original.number}`);
+  expect(selected.model.doGenerateCalls).toHaveLength(0);
+  expect(selected.payload.draft).toMatchObject({
     kind: "UPDATE",
     description: information,
     category: original.category,
     priority: original.priority,
     impact: original.impact,
   });
-  expect(result.message.content).not.toContain("Quem está sendo afetado");
+  expect(selected.message.content).not.toContain("Quem está sendo afetado");
 });
 
 test.each(["INC-20315", "INC-20150", "INC-999999"])(
   "complemento %s não permite alvo alheio, resolvido ou inexistente",
   async (number) => {
-    const result = await turn("Testei outra tomada e não funcionou.", {
-      ...assessment,
-      ticketUpdate: { number },
-    });
+    const result = await turn(
+      `No ${number}, testei outra tomada e não funcionou.`,
+      {
+        ...assessment,
+        ticketUpdate: { number },
+      },
+    );
     expect(result.payload.draft).toBeUndefined();
     expect(result.message.content).toContain(
       "Não encontrei esse chamado ativo entre os seus",
@@ -505,8 +641,15 @@ test.each(["INC-20312", "INC-20150", null])(
   "seleção de duplicidade %s não depende de proposal.duplicate nem repete pergunta",
   async (number) => {
     const first = await turn(
-      "O monitor continua sem ligar. Quero registrar um chamado.",
-      { ...assessment, proposal: { ...complete, duplicate: null } },
+      "A VPN continua sem conectar ao SAP. Quero registrar um chamado.",
+      {
+        ...assessment,
+        proposal: {
+          ...complete,
+          duplicate: null,
+          possibleRelatedNumbers: ["INC-20150"],
+        },
+      },
     );
     expect(first.message.content).toContain("Algum destes chamados");
     const selected = await turn(
