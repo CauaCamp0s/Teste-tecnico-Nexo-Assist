@@ -133,12 +133,17 @@ export function ChatView({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (locked.current || cannotSend || !draft.trim()) return;
+    await send(draft);
+  }
+
+  async function send(text: string) {
+    if (locked.current || cannotSend || !text.trim()) return;
     locked.current = true;
+    setDraft(text);
     setError(null);
     setPhase("sending");
     try {
-      const result = await sendMessage(conversationId, draft);
+      const result = await sendMessage(conversationId, text);
       if (!result.message) {
         setError(result.error);
         return;
@@ -196,10 +201,7 @@ export function ChatView({
                     key={text}
                     type="button"
                     disabled={busy || paused}
-                    onClick={() => {
-                      setDraft(text);
-                      input.current?.focus();
-                    }}
+                    onClick={() => void send(text)}
                   >
                     {text} <span aria-hidden="true">↗</span>
                   </button>
@@ -261,10 +263,7 @@ export function ChatView({
                   onDraft={handleDraft}
                   disabled={busy || paused}
                   limitReached={cannotSend}
-                  onOption={(text) => {
-                    setDraft(text);
-                    input.current?.focus();
-                  }}
+                  onOption={(text) => void send(text)}
                 />
               )}
             </article>

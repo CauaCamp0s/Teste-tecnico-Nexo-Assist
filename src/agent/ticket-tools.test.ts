@@ -4,7 +4,7 @@ import {
   type TicketFixture,
 } from "@/services/tickets/test-support";
 import { createTicketService } from "@/services/tickets/service";
-import { createEmployeeTicketTools } from "./ticket-tools";
+import { createEmployeeTicketTools, overdueExplanation } from "./ticket-tools";
 import { buildDecisionRecord, type Consultation } from "./decisions";
 
 let f: TicketFixture;
@@ -43,4 +43,34 @@ test("ferramentas isolam identidade e apresentação deriva vencimento dos dados
   await tools.tools.get_ticket.execute!({ number: "INC-20315" }, {} as never);
   expect(tools.presentation(record)?.payload.tickets).toEqual([]);
   expect(queries.at(-1)?.result.summary).toContain("Nenhum");
+});
+
+test("atraso informa tempo real sem atualização e prazo da prioridade", async () => {
+  const ticket = await createTicketService(f.db, f.clock).get(
+    f.ana,
+    "INC-20311",
+  );
+  const now = new Date("2026-11-12T12:00:00Z");
+  expect(
+    overdueExplanation(
+      {
+        ...ticket!,
+        priority: "MEDIUM",
+        lastUpdatedAt: new Date("2026-11-06T12:00:00Z"),
+      },
+      now,
+    ),
+  ).toContain(
+    "há 6 dias, acima do prazo de 3 dias úteis para prioridade média",
+  );
+  expect(
+    overdueExplanation(
+      {
+        ...ticket!,
+        priority: "CRITICAL",
+        lastUpdatedAt: new Date("2026-11-12T10:00:00Z"),
+      },
+      now,
+    ),
+  ).toContain("há 2 horas, acima do prazo de 1 hora corrida");
 });

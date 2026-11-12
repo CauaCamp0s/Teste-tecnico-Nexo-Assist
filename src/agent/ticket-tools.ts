@@ -3,7 +3,33 @@ import { z } from "zod";
 import type { TicketService, EmployeeTicket } from "@/services/tickets/types";
 import { TicketUnavailableError } from "@/services/tickets/errors";
 import type { Consultation, DecisionRecord } from "./decisions";
-import { ticketCard, type ChatPayload } from "@/services/chat-payload";
+import {
+  ticketCard,
+  priorityLabels,
+  type ChatPayload,
+} from "@/services/chat-payload";
+
+export function overdueExplanation(ticket: EmployeeTicket, now = new Date()) {
+  const elapsed = Math.max(
+    0,
+    now.getTime() - (ticket.lastUpdatedAt ?? ticket.createdAt).getTime(),
+  );
+  const days = Math.floor(elapsed / 86400000);
+  const hours = Math.floor(elapsed / 3600000);
+  const age =
+    days >= 1
+      ? `${days} ${days === 1 ? "dia" : "dias"}`
+      : hours >= 1
+        ? `${hours} ${hours === 1 ? "hora" : "horas"}`
+        : "menos de uma hora";
+  const sla = {
+    CRITICAL: "1 hora corrida",
+    HIGH: "4 horas úteis",
+    MEDIUM: "3 dias úteis",
+    LOW: "5 dias úteis",
+  }[ticket.priority];
+  return `O chamado ${ticket.number} está sem atualização há ${age}, acima do prazo de ${sla} para prioridade ${priorityLabels[ticket.priority].toLocaleLowerCase("pt-BR")}. Quer que eu chame um analista?`;
+}
 
 export function createEmployeeTicketTools(
   employeeId: string,
@@ -139,7 +165,7 @@ export function createEmployeeTicketTools(
           { label: "Não, obrigado", value: "Não quero transferir agora" },
         ];
         return {
-          content: `O prazo do chamado ${ticket.number} está vencido. Quer que eu chame um analista?`,
+          content: overdueExplanation(ticket),
           payload,
         };
       }

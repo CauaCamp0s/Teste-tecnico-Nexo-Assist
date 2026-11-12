@@ -635,6 +635,52 @@
   margin: 12px 0;
   background: white;
 }
+.ticketSelector {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+.ticketSelector button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: white;
+  color: var(--ink);
+  text-align: left;
+}
+.ticketSelector button:last-child {
+  border-bottom: 0;
+}
+.ticketSelector button:hover:not(:disabled) {
+  background: #0285f712;
+}
+.selectionTitle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.selectionTitle strong,
+.ticketSelector time {
+  font-size: 11px;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .ticketSelector button {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .selectionTitle {
+    flex-basis: 100%;
+  }
+}
 .ticketCard header {
   display: flex;
   justify-content: space-between;

@@ -21,45 +21,89 @@ export function MessagePayload({
   limitReached?: boolean;
   onDraft?: (id: string, action: "confirm" | "cancel") => void;
 }) {
+  const selectionValue = (number: string) =>
+    payload.options?.find(
+      (option) =>
+        option.value === number ||
+        option.value === `É o mesmo problema do ${number}`,
+    )?.value;
+  const selection =
+    !!payload.tickets?.length &&
+    payload.tickets.every((ticket) => selectionValue(ticket.number));
+  const otherOptions = payload.options?.filter(
+    (option) =>
+      !selection ||
+      !payload.tickets?.some(
+        (ticket) => selectionValue(ticket.number) === option.value,
+      ),
+  );
   return (
     <div className={styles.payload}>
-      {payload.tickets?.map((ticket) => (
-        <section className={styles.ticketCard} key={ticket.id}>
-          <header>
-            <strong>{ticket.number}</strong>
-            <span className={styles.badge} data-status={ticket.status}>
-              {statusLabels[ticket.status]}
-            </span>
-          </header>
-          <h3>{ticket.title}</h3>
-          <p>{ticket.description}</p>
-          <dl>
-            <dt>Categoria</dt>
-            <dd>{categoryLabels[ticket.category]}</dd>
-            <dt>Prioridade</dt>
-            <dd>
-              <span className={styles.priority} data-priority={ticket.priority}>
-                {priorityLabels[ticket.priority]}
+      {selection && (
+        <div className={styles.ticketSelector} aria-label="Selecionar chamado">
+          {payload.tickets?.map((ticket) => (
+            <button
+              type="button"
+              key={ticket.id}
+              disabled={disabled || limitReached}
+              onClick={() => onOption(selectionValue(ticket.number)!)}
+            >
+              <span className={styles.selectionTitle}>
+                <strong>{ticket.number}</strong>
+                <span>{ticket.title}</span>
               </span>
-            </dd>
-            <dt>Aberto em</dt>
-            <dd>{formatDate(ticket.createdAt)}</dd>
-            <dt>Última atualização</dt>
-            <dd>
-              {ticket.lastUpdatedAt
-                ? formatDate(ticket.lastUpdatedAt)
-                : "Sem atualização"}
-            </dd>
-            <dt>Prazo</dt>
-            <dd>
-              {ticket.dueAt ? formatDate(ticket.dueAt) : "Sem prazo pendente"}{" "}
-              {ticket.isOverdue && (
-                <strong className={styles.overdue}>· prazo vencido</strong>
-              )}
-            </dd>
-          </dl>
-        </section>
-      ))}
+              <span className={styles.badge} data-status={ticket.status}>
+                {statusLabels[ticket.status]}
+              </span>
+              <time>
+                {formatDate(ticket.lastUpdatedAt ?? ticket.createdAt)}
+              </time>
+              <span aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!selection &&
+        payload.tickets?.map((ticket) => (
+          <section className={styles.ticketCard} key={ticket.id}>
+            <header>
+              <strong>{ticket.number}</strong>
+              <span className={styles.badge} data-status={ticket.status}>
+                {statusLabels[ticket.status]}
+              </span>
+            </header>
+            <h3>{ticket.title}</h3>
+            <p>{ticket.description}</p>
+            <dl>
+              <dt>Categoria</dt>
+              <dd>{categoryLabels[ticket.category]}</dd>
+              <dt>Prioridade</dt>
+              <dd>
+                <span
+                  className={styles.priority}
+                  data-priority={ticket.priority}
+                >
+                  {priorityLabels[ticket.priority]}
+                </span>
+              </dd>
+              <dt>Aberto em</dt>
+              <dd>{formatDate(ticket.createdAt)}</dd>
+              <dt>Última atualização</dt>
+              <dd>
+                {ticket.lastUpdatedAt
+                  ? formatDate(ticket.lastUpdatedAt)
+                  : "Sem atualização"}
+              </dd>
+              <dt>Prazo</dt>
+              <dd>
+                {ticket.dueAt ? formatDate(ticket.dueAt) : "Sem prazo pendente"}{" "}
+                {ticket.isOverdue && (
+                  <strong className={styles.overdue}>· prazo vencido</strong>
+                )}
+              </dd>
+            </dl>
+          </section>
+        ))}
       {payload.draft && (
         <section className={styles.ticketCard}>
           <header>
@@ -140,9 +184,9 @@ export function MessagePayload({
           )}
         </section>
       )}
-      {!!payload.options?.length && (
+      {!!otherOptions?.length && (
         <div className={styles.quickOptions}>
-          {payload.options.map((option) => (
+          {otherOptions.map((option) => (
             <button
               type="button"
               key={option.value}
