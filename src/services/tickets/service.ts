@@ -157,11 +157,15 @@ export function createTicketService(
         content,
         now,
         async (tx) => {
-          const sequence = await tx.ticketSequence.upsert({
-            where: { type: content.type },
-            create: { type: content.type, value: 100_001 },
-            update: { value: { increment: 1 } },
-          });
+          // Reserva atômica no SQLite, dentro da mesma transação da escrita.
+          // MAX numérico também considera importações posteriores ao contador.
+          const [sequence] = await tx.$queryRaw<{ value: number }[]>`
+            INSERT INTO "TicketSequence" ("type", "value")
+            SELECT ${content.type}, COALESCE(MAX(CAST(SUBSTR("number", 5) AS INTEGER)), 0) + 1
+            FROM "Ticket" WHERE "type" = ${content.type}
+            ON CONFLICT("type") DO UPDATE SET "value" = MAX("TicketSequence"."value", excluded."value" - 1) + 1
+            RETURNING "value"
+          `;
           return tx.ticket.create({
             data: {
               ...content,

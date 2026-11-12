@@ -241,7 +241,7 @@ test("abertura com uma pergunta até confirmação, sem urgência redundante nem
     second.payload.draft!.id,
     "confirm",
   );
-  expect(confirmed.content).toContain("Criou o chamado INC-100001");
+  expect(confirmed.content).toContain("Criou o chamado INC-20316");
   await act(f.ana, f.conversationId, second.payload.draft!.id, "confirm");
   expect(await f.db.ticket.count()).toBe(10);
   const savedCard = await f.db.message.findUniqueOrThrow({

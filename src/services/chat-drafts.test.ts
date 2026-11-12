@@ -33,10 +33,10 @@ test("confirmação idempotente e resultado real são atômicos", async () => {
   const first = await act(f.ana, f.conversationId, d.id, "confirm");
   const second = await act(f.ana, f.conversationId, d.id, "confirm");
   expect(second.id).toBe(first.id);
-  expect(first.content).toContain("INC-100001");
+  expect(first.content).toContain("INC-20316");
   expect(
     (first.decisionRecord as unknown as DecisionRecord).executedActions,
-  ).toEqual(["Criou INC-100001."]);
+  ).toEqual(["Criou INC-20316."]);
   expect(await f.db.ticket.count()).toBe(10);
   expect(await f.db.message.count()).toBe(1);
 });

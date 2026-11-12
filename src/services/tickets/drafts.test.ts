@@ -52,7 +52,7 @@ test("confirmar novamente após reconexão não duplica chamado e usa id do rasc
     status: "CONFIRMED",
     resultTicketId: first.ticket.id,
   });
-  expect(first.ticket.number).toBe("INC-100001");
+  expect(first.ticket.number).toBe("INC-20316");
   expect(await f.db.ticket.count()).toBe(10);
   expect(await f.db.ticketOperation.findFirst()).toMatchObject({
     idempotencyKey: draft.id,
@@ -69,6 +69,38 @@ test("duas confirmações concorrentes não criam dois chamados", async () => {
   ]);
   expect(results[0].ticket.id).toBe(results[1].ticket.id);
   expect(await f.db.ticket.count()).toBe(10);
+});
+
+test("numeração continua o máximo por tipo sob criação concorrente e após importação", async () => {
+  const service = createTicketService(f.db, f.clock);
+  const results = await Promise.all(
+    Array.from({ length: 4 }, (_, index) =>
+      service.create(f.ana, content, `concurrent-${index}`),
+    ),
+  );
+  expect(results.map((ticket) => ticket.number).sort()).toEqual([
+    "INC-20316",
+    "INC-20317",
+    "INC-20318",
+    "INC-20319",
+  ]);
+  expect(
+    (await service.create(f.ana, { ...content, type: "REQ" }, "request"))
+      .number,
+  ).toBe("REQ-10445");
+  await f.db.ticket.update({
+    where: { id: results[0].id },
+    data: { number: "INC-99999" },
+  });
+  expect((await service.create(f.ana, content, "after-import")).number).toBe(
+    "INC-100000",
+  );
+  expect((await service.create(f.ana, content, "after-import")).number).toBe(
+    "INC-100000",
+  );
+  expect(
+    (await service.create(f.ana, content, "after-width-change")).number,
+  ).toBe("INC-100001");
 });
 
 test("cancelar é idempotente e bloqueia confirmação", async () => {
