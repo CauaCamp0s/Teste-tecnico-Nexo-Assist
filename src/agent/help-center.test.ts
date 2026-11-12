@@ -395,6 +395,44 @@ test("timeout cancela a chamada e registra contingência", async () => {
   });
 }, 30_000);
 
+test.each([
+  "monitor não liga",
+  "impressora não imprime",
+  "não consigo acessar o e-mail",
+])(
+  "trata o cenário concreto %s como TI e preserva a consulta real",
+  async (problem) => {
+    await db.message.updateMany({
+      where: { conversationId, role: "EMPLOYEE" },
+      data: { content: problem },
+    });
+    const model = new MastraLanguageModelV2Mock({
+      doGenerate: [
+        tool(problem),
+        text({
+          ...assessment,
+          understanding: { intent: "ti", summary: problem },
+        }),
+      ],
+    });
+    const message = await respond(employeeId, conversationId, model);
+    const record = message.decisionRecord as unknown as DecisionRecord;
+    expect(record.understanding.intent).toBe("ti");
+    expect(record.consultations).toHaveLength(1);
+    expect(record.consultations[0].input.query).toBe(problem);
+    expect(record.executedActions).toEqual([]);
+    expect(model.doGenerateCalls).toHaveLength(2);
+    const prompt = JSON.stringify(model.doGenerateCalls[0].prompt);
+    expect(prompt).toContain(
+      "Defeitos concretos são TI mesmo sem detalhes de diagnóstico",
+    );
+    expect(prompt).toContain(
+      "indefinido somente para mensagens sem problema identificável",
+    );
+    expect(prompt).toContain(problem);
+  },
+);
+
 test("a busca ignora consultas genéricas e encontra títulos com acentos", async () => {
   expect(
     await search.searchHelpCenter("preciso de ajuda com meu problema"),
