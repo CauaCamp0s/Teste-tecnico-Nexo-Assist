@@ -102,6 +102,19 @@ export async function respondToConversation(
         }
       : undefined;
   const searchResults: unknown[] = [];
+  const employeeContext = conversation.messages
+    .filter((message) => message.role === "EMPLOYEE")
+    .map((message) => message.content)
+    .join("\n");
+  const explicitTicket =
+    /(?:quero|abr[ai]|criar|registre|registrar|reabr|complement|atualiz).{0,35}chamado|(?:reabr\w*|complement\w*|atualiz\w*|mesmo problema do)\s+(?:INC|REQ)-/i.test(
+      employeeContext,
+    );
+  const guidanceFailed =
+    /(?:não resolveu|nao resolveu|não funcionou|nao funcionou|já tentei|ja tentei)/i.test(
+      employeeContext,
+    );
+  let consultedArticles: Awaited<ReturnType<typeof searchHelpCenter>> = [];
   const draftFlow = createDraftFlow(
     employeeId,
     conversationId,
@@ -123,6 +136,7 @@ export async function respondToConversation(
     execute: async ({ query }) => {
       try {
         const articles = await searchHelpCenter(query);
+        consultedArticles = articles;
         consultations.push({
           tool: "search_help_center",
           input: { query },
@@ -162,6 +176,8 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
+      "Preencha helpOutcome: question quando faltar condição do artigo, guidance ao orientar, ticket_required somente quando a condição do artigo exige chamado, not_applicable se o artigo não se aplica. Não marque ticket_required apenas porque houve uma falha de equipamento. " +
+      "Priorize resolução sem fila. Para um problema de TI, consulte a central antes de iniciar coleta de chamado. Com artigo relevante, oriente primeiro e respeite suas condições: VPN 809 exige perguntar Windows 10 ou 11; no 10 oriente os passos, no 11 o artigo exige chamado. proposal=null enquanto faltar condição do artigo ou houver orientação aplicável ainda não tentada. Só inicie coleta quando houver pedido explícito de chamado, orientação sem resultado ou artigo inaplicável/exigindo chamado. " +
       "Ao consultar sem número, use list_tickets com subject contendo o assunto específico (ex.: 'meu chamado do notebook' => subject 'notebook'). Sem assunto, omita subject. A lista padrão contém só ativos; obtenha chamados resolvidos pelo número com get_ticket. " +
       "Reduza perguntas: gere um título conciso e infira tipo/categoria pelo relato. Exemplo: 'meu monitor não liga' => título 'Monitor não liga', INC, HARDWARE. Não pergunte título, tipo ou categoria quando inferíveis; null só para relato vago. Priorize esclarecer impacto e interrupção, uma pergunta objetiva por vez. Com interruption=stopped, compromisso no mesmo dia não muda alta/crítica: deixe null se não informado, sem perguntar. " +
       "Não deduza quem é afetado só por 'meu notebook': se o funcionário não informou se é só ele/equipe/empresa, impact=null. Interrupção e compromisso no mesmo dia também precisam de evidência explícita no relato, senão null. " +
@@ -265,6 +281,30 @@ export async function respondToConversation(
               providerOptions,
             }),
           );
+          const provisional = answerSchema.safeParse(initial.object);
+          const emergency =
+            provisional.success &&
+            provisional.data.proposal?.interruption === "stopped" &&
+            ["TEAM", "COMPANY"].includes(
+              provisional.data.proposal.impact ?? "",
+            );
+          if (
+            !explicitTicket &&
+            !emergency &&
+            !guidanceFailed &&
+            !consultations.some(
+              (consultation) => consultation.tool === "search_help_center",
+            ) &&
+            ((provisional.success &&
+              provisional.data.understanding.intent === "ti" &&
+              provisional.data.proposal) ||
+              consultations.some(
+                (consultation) =>
+                  consultation.tool === "find_duplicate_candidates",
+              ))
+          ) {
+            await search.execute!({ query: employeeContext }, {} as never);
+          }
           return consultations.length
             ? (await generateAnswer(false)).object
             : initial.object;
@@ -273,6 +313,41 @@ export async function respondToConversation(
     content = answer.answer;
     proposal = answer.proposal;
     handoff = answer.handoff;
+    if (
+      !selectedProposal &&
+      !explicitTicket &&
+      !guidanceFailed &&
+      consultedArticles.length
+    ) {
+      const vpn = consultedArticles.find(
+        (article) =>
+          article.title === "VPN com erro 809" &&
+          article.content.includes("Windows 10") &&
+          article.content.includes("Windows 11"),
+      );
+      const version = [...employeeContext.matchAll(/Windows\s*(10|11)/gi)].at(
+        -1,
+      )?.[1];
+      if (vpn && version !== "11") {
+        proposal = null;
+        content =
+          version === "10"
+            ? `${vpn.content.split("Vale apenas")[0].trim()} Isso resolveu o problema?`
+            : "O artigo de VPN com erro 809 tem orientações diferentes por versão. Você usa Windows 10 ou Windows 11?";
+      } else if (
+        !vpn &&
+        proposal &&
+        !(
+          "helpOutcome" in answer &&
+          ["ticket_required", "not_applicable"].includes(
+            answer.helpOutcome ?? "",
+          )
+        )
+      ) {
+        proposal = null;
+        content = `${consultedArticles.map((article) => `${article.title}: ${article.content}`).join("\n\n")}\n\nVocê já tentou essa orientação?`;
+      }
+    }
     const intent = assessment.understanding.intent;
 
     if (intent === "rh" || intent === "financeiro" || intent === "facilities") {

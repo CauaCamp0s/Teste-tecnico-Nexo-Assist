@@ -12,6 +12,9 @@ export const assessmentSchema = z.object({
 
 export const answerSchema = assessmentSchema.extend({
   answer: z.string().min(1),
+  helpOutcome: z
+    .enum(["question", "guidance", "ticket_required", "not_applicable"])
+    .optional(),
   proposal: proposalSchema.nullable().optional(),
   handoff: z
     .object({ requested: z.boolean(), relatedNumber: z.string().nullable() })

@@ -94,7 +94,7 @@ async function turn(
   const model = new MastraLanguageModelV2Mock({
     doGenerate: call
       ? [tool(call.name, call.input), text(answer)]
-      : [text(answer)],
+      : text(answer),
   });
   const start = performance.now();
   const message = await respond(f.ana, f.conversationId, model);
@@ -124,6 +124,29 @@ test("dúvida resolvida por artigo sem criar chamado", async () => {
   ).toBeGreaterThan(0);
   expect(result.record.executedActions).toEqual([]);
 });
+
+test.each(["10", "11"])(
+  "VPN 809 orienta antes da coleta e respeita Windows %s",
+  async (version) => {
+    const opening = await turn("Minha VPN está dando erro 809", {
+      ...assessment,
+      proposal: { ...complete, impact: null },
+    });
+    expect(opening.message.content).toContain("Windows 10 ou Windows 11");
+    expect(opening.payload.draft).toBeUndefined();
+    const followup = await turn(
+      `Windows ${version}`,
+      { ...assessment, proposal: { ...complete, impact: null } },
+      { name: "search_help_center", input: { query: "VPN erro 809" } },
+    );
+    expect(followup.message.content).toContain(
+      version === "10"
+        ? "Reinstale o cliente de VPN"
+        : "Quem está sendo afetado?",
+    );
+    expect(await f.db.ticketDraft.count()).toBe(0);
+  },
+);
 
 test("consulta sem número pede seleção; selecionado vencido oferece transferência", async () => {
   const list = await turn("Qual o status do meu chamado?", assessment, {
@@ -320,7 +343,7 @@ test.each(["INC-20312", "INC-20150", null])(
   "seleção de duplicidade %s não depende de proposal.duplicate nem repete pergunta",
   async (number) => {
     const first = await turn(
-      "O monitor continua sem ligar. Quero registrar o problema.",
+      "O monitor continua sem ligar. Quero registrar um chamado.",
       { ...assessment, proposal: { ...complete, duplicate: null } },
     );
     expect(first.message.content).toContain("Algum destes chamados");

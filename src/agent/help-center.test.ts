@@ -395,7 +395,7 @@ test("recupera resposta fora do schema em uma nova tentativa", async () => {
   expect(JSON.stringify(model.doGenerateCalls[2].prompt)).toContain(
     "VPN com erro 809",
   );
-  expect(message.content).toContain("Qual versão");
+  expect(message.content).toContain("Reinstale o cliente de VPN");
   expect((message.decisionRecord as unknown as DecisionRecord).confidence).toBe(
     "alta",
   );
