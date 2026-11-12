@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Na apresentação, registros omitem identificadores internos, mostram títulos retornados pelos artigos e números públicos dos chamados; datas são formatadas em pt-BR no fuso America/Sao_Paulo. O JSON técnico permanece persistido para diagnóstico.
+
 `list_tickets` lista ativos por padrão (exclui RESOLVED/CLOSED) e aceita `subject`; o serviço filtra título/descrição no banco sempre junto ao proprietário. Um único resultado é exibido diretamente; dois ou mais pedem seleção. O serviço geral mantém a opção de listar todos para o painel do analista.
 
 Coleta otimizada: título, tipo e categoria são inferidos pelo modelo quando o relato permite. O servidor prioriza lacunas de impacto/interrupção e dispensa perguntar compromisso hoje quando interrupção total já define alta/crítica; essa dispensa fica registrada, sem fingir que o funcionário respondeu “não”.

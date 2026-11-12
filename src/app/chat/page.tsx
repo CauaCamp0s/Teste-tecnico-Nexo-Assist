@@ -9,6 +9,7 @@ import { serializeChatMessage } from "@/services/chat";
 import { ChatView } from "./chat-view";
 import styles from "./chat.module.css";
 import { Schibsted_Grotesk } from "next/font/google";
+import { formatDate } from "@/lib/presentation";
 
 const chatFont = Schibsted_Grotesk({ subsets: ["latin"], display: "swap" });
 
@@ -63,7 +64,7 @@ export default async function ChatPage({
         <nav aria-label="Conversas anteriores">
           {conversations.map((item) => (
             <a key={item.id} href={`/chat?id=${item.id}`}>
-              {item.createdAt.toLocaleDateString("pt-BR")} ·{" "}
+              {formatDate(item.createdAt)} ·{" "}
               {item.status === "AGENT"
                 ? "Assistente"
                 : item.status === "CLOSED"

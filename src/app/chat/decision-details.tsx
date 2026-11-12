@@ -1,5 +1,6 @@
 import type { DecisionRecord } from "@/agent/decisions";
 import styles from "./chat.module.css";
+import { readableDecisionText } from "@/lib/presentation";
 
 const decisions = {
   orientar_com_artigos: "Orientar com artigos",
@@ -67,7 +68,7 @@ export function ActivityLine({ record }: { record: DecisionRecord | null }) {
         <span>✓ calculou o prazo</span>
       )}
       {record?.executedActions.map((action) => (
-        <span key={action}>✓ {action}</span>
+        <span key={action}>✓ {readableDecisionText(action)}</span>
       ))}
       {!!record?.modelRetries?.length && (
         <span>↻ nova tentativa do modelo</span>
@@ -91,7 +92,7 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
           <dt>Entendimento</dt>
           <dd>
             <strong>{intents[record.understanding.intent]}</strong> ·{" "}
-            {record.understanding.summary}
+            {readableDecisionText(record.understanding.summary)}
           </dd>
           <dt>Consultas</dt>
           <dd>
@@ -101,25 +102,26 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
                   <li key={index}>
                     <strong>{toolLabels[consultation.tool]}</strong>
                     {(consultation.input.query ||
-                      consultation.input.number) && (
+                      consultation.input.number ||
+                      consultation.input.subject) && (
                       <>
                         {" "}
                         · “
-                        {consultation.input.query || consultation.input.number}”
+                        {readableDecisionText(
+                          consultation.input.query ||
+                            consultation.input.number ||
+                            consultation.input.subject ||
+                            "",
+                        )}
+                        ”
                       </>
                     )}
                     <p>
                       {consultation.result.status === "error"
                         ? "Consulta não concluída. "
                         : ""}
-                      {consultation.result.summary}
+                      {readableDecisionText(consultation.result.summary)}
                     </p>
-                    {!!consultation.result.articleIds.length && (
-                      <span className={styles.articleIds}>
-                        Artigos consultados:{" "}
-                        {consultation.result.articleIds.join(", ")}
-                      </span>
-                    )}
                   </li>
                 ))}
               </ul>
@@ -134,7 +136,7 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
             {record.executedActions.length ? (
               <ul>
                 {record.executedActions.map((action, index) => (
-                  <li key={index}>{action}</li>
+                  <li key={index}>{readableDecisionText(action)}</li>
                 ))}
               </ul>
             ) : (
@@ -144,14 +146,14 @@ export function DecisionDetails({ record }: { record: DecisionRecord }) {
           <dt>Segurança</dt>
           <dd>{record.confidence}</dd>
           <dt>Motivo</dt>
-          <dd>{record.reason}</dd>
+          <dd>{readableDecisionText(record.reason)}</dd>
           {!!record.appliedRules.length && (
             <>
               <dt>Regras aplicadas</dt>
               <dd>
                 <ul>
                   {record.appliedRules.map((rule) => (
-                    <li key={rule}>{rule}</li>
+                    <li key={rule}>{readableDecisionText(rule)}</li>
                   ))}
                 </ul>
               </dd>

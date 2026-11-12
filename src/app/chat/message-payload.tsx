@@ -6,6 +6,7 @@ import {
   type ChatPayload,
 } from "@/services/chat-payload";
 import styles from "./chat.module.css";
+import { formatDate } from "@/lib/presentation";
 
 export function MessagePayload({
   payload,
@@ -36,18 +37,16 @@ export function MessagePayload({
             <dt>Prioridade</dt>
             <dd>{priorityLabels[ticket.priority]}</dd>
             <dt>Aberto em</dt>
-            <dd>{new Date(ticket.createdAt).toLocaleString("pt-BR")}</dd>
+            <dd>{formatDate(ticket.createdAt)}</dd>
             <dt>Última atualização</dt>
             <dd>
               {ticket.lastUpdatedAt
-                ? new Date(ticket.lastUpdatedAt).toLocaleString("pt-BR")
+                ? formatDate(ticket.lastUpdatedAt)
                 : "Sem atualização"}
             </dd>
             <dt>Prazo</dt>
             <dd>
-              {ticket.dueAt
-                ? new Date(ticket.dueAt).toLocaleString("pt-BR")
-                : "Sem prazo pendente"}{" "}
+              {ticket.dueAt ? formatDate(ticket.dueAt) : "Sem prazo pendente"}{" "}
               {ticket.isOverdue && (
                 <strong className={styles.overdue}>· prazo vencido</strong>
               )}
@@ -90,7 +89,7 @@ export function MessagePayload({
             <dt>Previsão de prazo</dt>
             <dd>
               {payload.draft.dueAt
-                ? new Date(payload.draft.dueAt).toLocaleString("pt-BR")
+                ? formatDate(payload.draft.dueAt)
                 : "Calculado na confirmação"}
             </dd>
           </dl>
