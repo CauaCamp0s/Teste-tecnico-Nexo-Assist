@@ -3,6 +3,7 @@ import { logout } from "@/app/login/actions";
 import {
   getConversation,
   getOrCreateConversation,
+  listConversations,
 } from "@/services/conversations";
 import { serializeChatMessage } from "@/services/chat";
 import { ChatView } from "./chat-view";
@@ -11,10 +12,16 @@ import { Schibsted_Grotesk } from "next/font/google";
 
 const chatFont = Schibsted_Grotesk({ subsets: ["latin"], display: "swap" });
 
-export default async function ChatPage() {
+export default async function ChatPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ id?: string }>;
+} = {}) {
   const user = await requireRole("EMPLOYEE");
-  const current = await getOrCreateConversation(user.id);
+  const { id } = (await searchParams) ?? {};
+  const current = id ? { id } : await getOrCreateConversation(user.id);
   const conversation = await getConversation(user.id, current.id);
+  const conversations = await listConversations(user.id);
   if (!conversation) throw new Error("Conversa não encontrada.");
   const initials = user.name
     .split(" ")
@@ -52,6 +59,18 @@ export default async function ChatPage() {
           <a href="/chat" aria-current="page" className={styles.navActive}>
             <span aria-hidden="true">◷</span> Atendimento
           </a>
+        </nav>
+        <nav aria-label="Conversas anteriores">
+          {conversations.map((item) => (
+            <a key={item.id} href={`/chat?id=${item.id}`}>
+              {item.createdAt.toLocaleDateString("pt-BR")} ·{" "}
+              {item.status === "AGENT"
+                ? "Assistente"
+                : item.status === "CLOSED"
+                  ? "Encerrada"
+                  : "Atendimento humano"}
+            </a>
+          ))}
         </nav>
         <div className={styles.account}>
           <span className={styles.avatar} aria-hidden="true">

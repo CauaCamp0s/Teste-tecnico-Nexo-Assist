@@ -16,6 +16,7 @@ vi.mock("next/font/google", () => ({
   Schibsted_Grotesk: () => ({ className: "chat-font" }),
 }));
 vi.mock("@/services/conversations", () => ({
+  listConversations: vi.fn().mockResolvedValue([]),
   getOrCreateConversation: vi.fn(async () => ({ id: "conversation" })),
   getConversation: vi.fn(async () => ({
     id: "conversation",

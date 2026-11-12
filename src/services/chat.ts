@@ -30,7 +30,7 @@ export async function saveChatMessage(
     throw new Error("Envie uma mensagem com até 4.000 caracteres.");
   }
   const conversation = await getConversation(employeeId, conversationId);
-  if (!conversation || conversation.status !== "AGENT") {
+  if (!conversation || conversation.status === "CLOSED") {
     throw new Error("Esta conversa não está disponível para o assistente.");
   }
   return serializeChatMessage(

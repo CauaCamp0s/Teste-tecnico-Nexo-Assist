@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { ConversationStatus } from "@prisma/client";
 import type { ChatMessage } from "@/services/chat";
-import { requestReply, sendMessage } from "./actions";
+import {
+  requestReply,
+  sendMessage,
+  refreshConversation,
+  newConversation,
+} from "./actions";
 import { ActivityLine, DecisionDetails } from "./decision-details";
 import styles from "./chat.module.css";
 
@@ -26,7 +31,34 @@ export function ChatView({
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const busy = phase !== "idle";
-  const paused = status !== "AGENT";
+  const [currentStatus, setCurrentStatus] = useState(status);
+  const paused = currentStatus !== "AGENT";
+  const count = messages.filter(({ role }) => role === "EMPLOYEE").length;
+  const cannotSend = currentStatus === "CLOSED" || count >= 30;
+  useEffect(() => {
+    if (!paused) return;
+    let active = true;
+    const timer = setInterval(() => {
+      if (locked.current) return;
+      void refreshConversation(conversationId)
+        .then((result) => {
+          if (active) {
+            setMessages(result.messages);
+            setCurrentStatus(result.status);
+          }
+        })
+        .catch(() => {
+          if (active)
+            setError(
+              "Não foi possível atualizar o atendimento. Tentaremos novamente.",
+            );
+        });
+    }, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [conversationId, paused]);
   const last = messages.at(-1);
   const pendingMessage = last?.role === "EMPLOYEE" ? last : null;
 
@@ -66,7 +98,7 @@ export function ChatView({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (locked.current || paused || !draft.trim()) return;
+    if (locked.current || cannotSend || !draft.trim()) return;
     locked.current = true;
     setError(null);
     setPhase("sending");
@@ -78,7 +110,7 @@ export function ChatView({
       }
       append(result.message);
       setDraft("");
-      await getReply(result.message.id);
+      if (!paused) await getReply(result.message.id);
     } catch {
       setError(
         "Não foi possível confirmar o envio. Seu texto foi mantido. Atualize a conversa antes de enviar novamente.",
@@ -230,10 +262,16 @@ export function ChatView({
         </div>
       </section>
       <div className={styles.composerArea}>
-        {paused ? (
+        {paused && (
           <p className={styles.paused}>
-            O assistente está pausado nesta conversa. Atualize a página para
-            acompanhar o atendimento.
+            O assistente está pausado. O atendimento é atualizado
+            automaticamente.
+          </p>
+        )}
+        {cannotSend ? (
+          <p>
+            Esta conversa não aceita novas mensagens. O histórico e o
+            atendimento pendente estão preservados.
           </p>
         ) : (
           <form onSubmit={submit} className={styles.composer} aria-busy={busy}>
@@ -267,12 +305,14 @@ export function ChatView({
           </form>
         )}
         <div className={styles.composerMeta}>
-          <span>
-            {messages.filter(({ role }) => role === "EMPLOYEE").length}{" "}
-            mensagens enviadas
-          </span>
+          <span>{count}/30 mensagens nesta conversa</span>
           <span>Enter para enviar · Shift + Enter para nova linha</span>
         </div>
+        <form action={newConversation}>
+          <button type="submit" disabled={busy}>
+            Iniciar nova conversa
+          </button>
+        </form>
       </div>
     </div>
   );

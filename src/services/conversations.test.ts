@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { transitionConversation } from "./conversation-state";
 
 let directory: string;
 let db: PrismaClient;
@@ -221,4 +222,58 @@ test("rejeita mensagem vazia sem alterar a conversa", async () => {
   expect(await conversations.getConversation("ana", conversation.id)).toEqual(
     before,
   );
+});
+
+test("limite é atômico, preserva atendimento pendente e permite nova conversa", async () => {
+  const c = await conversations.getOrCreateConversation("ana");
+  for (let i = 0; i < 29; i++)
+    await conversations.addMessage("ana", c.id, `Mensagem ${i}`);
+  const result = await Promise.allSettled([
+    conversations.addMessage("ana", c.id, "30"),
+    conversations.addMessage("ana", c.id, "31"),
+  ]);
+  expect(result.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  await db.$transaction((tx) =>
+    transitionConversation(tx, c.id, "ana", "AGENT", "WAITING_FOR_ANALYST"),
+  );
+  const next = await conversations.startConversation("ana");
+  expect(next.id).not.toBe(c.id);
+  expect((await conversations.getConversation("ana", c.id))?.status).toBe(
+    "WAITING_FOR_ANALYST",
+  );
+  expect(
+    (await conversations.getConversation("ana", c.id))?.messages,
+  ).toHaveLength(30);
+});
+
+test("transições validam origem e encerramento bloqueia novas mensagens", async () => {
+  const c = await conversations.getOrCreateConversation("ana");
+  await expect(
+    db.$transaction((tx) =>
+      transitionConversation(tx, c.id, "ana", "AGENT", "ANALYST"),
+    ),
+  ).rejects.toThrow("inválida");
+  await expect(
+    db.$transaction((tx) =>
+      transitionConversation(tx, c.id, "bruno", "AGENT", "CLOSED"),
+    ),
+  ).rejects.toThrow("estado");
+  for (const [from, to] of [
+    ["AGENT", "WAITING_FOR_ANALYST"],
+    ["WAITING_FOR_ANALYST", "ANALYST"],
+    ["ANALYST", "AGENT"],
+    ["AGENT", "CLOSED"],
+  ] as const) {
+    await db.$transaction((tx) =>
+      transitionConversation(tx, c.id, "ana", from, to),
+    );
+  }
+  await expect(conversations.addMessage("ana", c.id, "Olá")).rejects.toThrow(
+    "encerrada",
+  );
+  await expect(
+    db.$transaction((tx) =>
+      transitionConversation(tx, c.id, "ana", "CLOSED", "AGENT"),
+    ),
+  ).rejects.toThrow("inválida");
 });

@@ -1,5 +1,9 @@
 import { db } from "@/lib/db";
 
+export async function startConversation(employeeId: string) {
+  return db.conversation.create({ data: { employeeId } });
+}
+
 export async function getOrCreateConversation(employeeId: string) {
   return db.$transaction(async (tx) => {
     const conversation = await tx.conversation.findFirst({
@@ -39,6 +43,19 @@ export async function addMessage(
   if (!text) throw new Error("A mensagem não pode estar vazia.");
 
   return db.$transaction(async (tx) => {
+    const conversation = await tx.conversation.findFirst({
+      where: { id: conversationId, employeeId },
+    });
+    if (!conversation) throw new Error("Conversa não encontrada.");
+    if (conversation.status === "CLOSED")
+      throw new Error("Esta conversa foi encerrada.");
+    const count = await tx.message.count({
+      where: { conversationId, role: "EMPLOYEE" },
+    });
+    if (count >= 30)
+      throw new Error(
+        "Limite de 30 mensagens atingido. Inicie uma nova conversa.",
+      );
     const updated = await tx.conversation.updateMany({
       where: { id: conversationId, employeeId },
       data: { updatedAt: new Date() },

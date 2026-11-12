@@ -1,6 +1,25 @@
 "use server";
 
 import { requireRole } from "@/lib/session";
+import { getConversation, startConversation } from "@/services/conversations";
+import { serializeChatMessage } from "@/services/chat";
+import { redirect } from "next/navigation";
+
+export async function refreshConversation(conversationId: string) {
+  const user = await requireRole("EMPLOYEE");
+  const conversation = await getConversation(user.id, conversationId);
+  if (!conversation) throw new Error("Conversa não encontrada.");
+  return {
+    status: conversation.status,
+    messages: conversation.messages.map(serializeChatMessage),
+  };
+}
+
+export async function newConversation() {
+  const user = await requireRole("EMPLOYEE");
+  const conversation = await startConversation(user.id);
+  redirect(`/chat?id=${conversation.id}`);
+}
 import {
   saveChatMessage,
   generateChatReply,

@@ -90,16 +90,21 @@ test("resposta já persistida é devolvida sem gerar novamente ou duplicar mensa
 });
 
 test.each(["ANALYST", "CLOSED", "WAITING_FOR_ANALYST"] as const)(
-  "não envia nem gera resposta com conversa %s",
+  "agent pausado em %s; funcionário só é bloqueado quando encerrada",
   async (status) => {
     const saved = await chat.saveChatMessage("ana", "chat-ana", "Olá");
     await db.conversation.update({
       where: { id: "chat-ana" },
       data: { status },
     });
-    await expect(
-      chat.saveChatMessage("ana", "chat-ana", "Mais dados"),
-    ).rejects.toThrow();
+    if (status === "CLOSED")
+      await expect(
+        chat.saveChatMessage("ana", "chat-ana", "Mais dados"),
+      ).rejects.toThrow();
+    else
+      await expect(
+        chat.saveChatMessage("ana", "chat-ana", "Mais dados"),
+      ).resolves.toMatchObject({ role: "EMPLOYEE" });
     await expect(
       chat.generateChatReply("ana", "chat-ana", saved.id),
     ).rejects.toThrow();

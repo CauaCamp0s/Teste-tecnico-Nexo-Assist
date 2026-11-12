@@ -1,5 +1,9 @@
 # Nexo Assist
 
+## Etapa 4 — interpretações do protótipo e Anexo A
+
+O limite conta as 30 mensagens do funcionário (inclusive ao analista), não respostas nem cliques determinísticos de confirmação. A 30ª recebe resposta normalmente; a 31ª é rejeitada em transação. Nova conversa não encerra nem remove atendimento pendente; o histórico fica acessível no menu. Em espera/atendimento humano, o funcionário pode acrescentar informações até o limite, mas o agent permanece pausado. O chat consulta atualizações a cada 3 segundos fora de AGENT. Encerramento é terminal; a devolução ao agent exige que um analista tenha assumido antes.
+
 ### Transferência e disponibilidade do legado
 
 Quando a confirmação esgota as tentativas por `TicketUnavailableError`, o rascunho permanece `PENDING`, com `failureCode: UNAVAILABLE`, permitindo nova confirmação após a recuperação. Uma confirmação bem-sucedida limpa o código de falha; erros definitivos continuam marcando `FAILED`.
