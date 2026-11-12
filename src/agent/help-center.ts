@@ -73,6 +73,34 @@ export async function respondToConversation(
       content: message.content,
     }));
   const consultations: Consultation[] = [];
+  const latestEmployee = conversation.messages.findLast(
+    (message) => message.role === "EMPLOYEE",
+  );
+  const previousAgent = conversation.messages
+    .slice(0, conversation.messages.indexOf(latestEmployee!))
+    .findLast((message) => message.role === "AGENT");
+  const previousPayload = previousAgent?.payload as ChatPayload | null;
+  const selection = latestEmployee?.content.trim();
+  const offered =
+    previousPayload?.pendingProposal &&
+    previousPayload.options?.some((option) => option.value === selection);
+  const selectedNumber = selection?.match(
+    /^É o mesmo problema do ((?:INC|REQ)-\d+)$/,
+  )?.[1];
+  const selectedProposal =
+    offered &&
+    (selectedNumber ||
+      selection === "É outro problema, diferente desses chamados")
+      ? {
+          ...previousPayload.pendingProposal!,
+          duplicate: {
+            relation: selectedNumber
+              ? ("same" as const)
+              : ("different" as const),
+            number: selectedNumber ?? null,
+          },
+        }
+      : undefined;
   const searchResults: unknown[] = [];
   const draftFlow = createDraftFlow(
     employeeId,
@@ -128,7 +156,9 @@ export async function respondToConversation(
   const agent = new Agent({
     id: "help-center",
     name: "Nexo Assist",
-    model: model ?? configuredModel(),
+    model:
+      model ??
+      (selectedProposal ? "google/gemini-3.5-flash-lite" : configuredModel()),
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
@@ -200,32 +230,45 @@ export async function respondToConversation(
     );
   }
   try {
-    const answer = await validated(answerSchema, async (attempt) => {
-      if (attempt > 0) return (await generateAnswer(true)).object;
-      const initial = await runModel("initial", () =>
-        agent.generate(history, {
-          activeTools: [
-            "search_help_center",
-            "list_tickets",
-            "get_ticket",
-            "find_duplicate_candidates",
-          ],
-          toolChoice: "auto",
-          maxSteps: 1,
-          structuredOutput: {
-            schema: answerSchema,
-            jsonPromptInjection: true,
-            errorStrategy: "warn",
+    const answer = selectedProposal
+      ? {
+          understanding: {
+            intent: "ti" as const,
+            summary: "Funcionário respondeu à seleção de duplicidade.",
           },
-          abortSignal,
-          modelSettings: { maxRetries: 0 },
-          providerOptions,
-        }),
-      );
-      return consultations.length
-        ? (await generateAnswer(false)).object
-        : initial.object;
-    });
+          confidence: "alta" as const,
+          reason:
+            "Seleção explícita de uma opção oferecida; alvo revalidado pelo serviço.",
+          answer: "Confira o rascunho.",
+          proposal: selectedProposal,
+          handoff: null,
+        }
+      : await validated(answerSchema, async (attempt) => {
+          if (attempt > 0) return (await generateAnswer(true)).object;
+          const initial = await runModel("initial", () =>
+            agent.generate(history, {
+              activeTools: [
+                "search_help_center",
+                "list_tickets",
+                "get_ticket",
+                "find_duplicate_candidates",
+              ],
+              toolChoice: "auto",
+              maxSteps: 1,
+              structuredOutput: {
+                schema: answerSchema,
+                jsonPromptInjection: true,
+                errorStrategy: "warn",
+              },
+              abortSignal,
+              modelSettings: { maxRetries: 0 },
+              providerOptions,
+            }),
+          );
+          return consultations.length
+            ? (await generateAnswer(false)).object
+            : initial.object;
+        });
     assessment = answer;
     content = answer.answer;
     proposal = answer.proposal;
@@ -317,7 +360,7 @@ export async function respondToConversation(
     !failureReason &&
     !shouldTransfer &&
     assessment.understanding.intent === "ti"
-      ? await draftFlow.prepare(proposal, decisionRecord)
+      ? await draftFlow.prepare(proposal, decisionRecord, !!selectedProposal)
       : undefined;
   if (prepared) {
     content = prepared.content;

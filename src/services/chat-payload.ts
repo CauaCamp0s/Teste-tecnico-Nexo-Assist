@@ -23,6 +23,7 @@ export type DraftCard = {
   status: "PENDING" | "CONFIRMED" | "CANCELED" | "FAILED";
 };
 export type ChatPayload = {
+  pendingProposal?: import("@/agent/proposal").TicketProposal;
   options?: { label: string; value: string }[];
   tickets?: TicketCard[];
   draft?: DraftCard;

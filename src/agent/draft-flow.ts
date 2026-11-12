@@ -66,7 +66,11 @@ export function createDraftFlow(
       inputSchema: z.object({}),
       execute: lookup,
     }),
-    async prepare(proposal: TicketProposal, record: DecisionRecord) {
+    async prepare(
+      proposal: TicketProposal,
+      record: DecisionRecord,
+      selected = false,
+    ) {
       const fields = [
         [
           "impact",
@@ -209,7 +213,7 @@ export function createDraftFlow(
       }
       if (
         candidates?.length &&
-        (!compared ||
+        ((!compared && !selected && proposal.duplicate?.relation !== "same") ||
           !proposal.duplicate ||
           proposal.duplicate.relation === "uncertain" ||
           (proposal.duplicate.relation === "same" && !match))
@@ -221,6 +225,7 @@ export function createDraftFlow(
         return {
           content: "Algum destes chamados trata do mesmo problema?",
           payload: {
+            pendingProposal: proposal,
             tickets: candidates.map(ticketCard),
             options: [
               ...candidates.map((ticket) => ({

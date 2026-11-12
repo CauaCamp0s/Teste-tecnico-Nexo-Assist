@@ -316,6 +316,28 @@ test("fora de sete dias não reabre nem cria silenciosamente", async () => {
   expect(await f.db.ticketOperation.count()).toBe(0);
 });
 
+test.each(["INC-20312", "INC-20150", null])(
+  "seleção de duplicidade %s não depende de proposal.duplicate nem repete pergunta",
+  async (number) => {
+    const first = await turn(
+      "O monitor continua sem ligar. Quero registrar o problema.",
+      { ...assessment, proposal: { ...complete, duplicate: null } },
+    );
+    expect(first.message.content).toContain("Algum destes chamados");
+    const selected = await turn(
+      number
+        ? `É o mesmo problema do ${number}`
+        : "É outro problema, diferente desses chamados",
+      { ...assessment, proposal: null },
+    );
+    expect(selected.model.doGenerateCalls).toHaveLength(0);
+    expect(selected.payload.draft?.kind).toBe(
+      number === null ? "CREATE" : number === "INC-20150" ? "REOPEN" : "UPDATE",
+    );
+    expect(selected.message.content).not.toContain("Algum destes chamados");
+  },
+);
+
 test.each(["explicit", "critical", "low"])(
   "encaminha %s e não executa modelo enquanto pausado",
   async (reason) => {
