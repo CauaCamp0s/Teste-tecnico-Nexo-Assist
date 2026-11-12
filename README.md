@@ -2,6 +2,8 @@
 
 ## Etapa 4 — interpretações do protótipo e Anexo A
 
+Confirmar/Cancelar são server actions sem geração de modelo. Alteração, ledger de idempotência, resultado no histórico e atualização dos cards são atômicos. Repetir o mesmo botão devolve a mesma mensagem de resultado. Indisponibilidade preserva PENDING e informa que a tentativa não foi confirmada; erros definitivos exigem revisão. Os botões determinísticos continuam disponíveis ao atingir 30 mensagens (não consomem nova mensagem do funcionário).
+
 Coleta: o modelo extrai dados do histórico; o código pergunta um campo ausente por vez e calcula prioridade com `classifyTicketPriority`. O modelo compara candidatos consultados; sem consulta anterior ou com correspondência incerta, o servidor pede seleção. Um problema correspondente ativo vira complemento; resolvido elegível vira oferta de reabertura no card. Revisar dados cancela o rascunho pendente anterior e cria outro atomicamente com a resposta. O prazo no rascunho é uma previsão, recalculada na confirmação, não promessa de atendimento antes de uma reunião.
 
 Consultas do agent usam ferramentas sem parâmetro de identidade: `employeeId` fica no closure criado pelo servidor. Cards e ofertas de transferência por vencimento são derivados das consultas reais pelo código. Seleções rápidas preenchem o compositor para envio explícito. Cards persistem como retrato da consulta (datas reais, sem prometer horários ilustrativos do protótipo); a seleção consulta novamente. O payload estruturado suporta opções, chamados e rascunhos.

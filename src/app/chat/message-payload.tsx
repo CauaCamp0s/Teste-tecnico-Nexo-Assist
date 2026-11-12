@@ -11,10 +11,14 @@ export function MessagePayload({
   payload,
   onOption,
   disabled,
+  onDraft,
+  limitReached,
 }: {
   payload: ChatPayload;
   onOption: (text: string) => void;
   disabled: boolean;
+  limitReached?: boolean;
+  onDraft?: (id: string, action: "confirm" | "cancel") => void;
 }) {
   return (
     <div className={styles.payload}>
@@ -84,6 +88,24 @@ export function MessagePayload({
                 : "Calculado na confirmação"}
             </dd>
           </dl>
+          {payload.draft.status === "PENDING" && onDraft && (
+            <div className={styles.quickOptions}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onDraft(payload.draft!.id, "confirm")}
+              >
+                Confirmar / Tentar novamente
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onDraft(payload.draft!.id, "cancel")}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </section>
       )}
       {!!payload.options?.length && (
@@ -93,7 +115,7 @@ export function MessagePayload({
               type="button"
               key={option.value}
               onClick={() => onOption(option.value)}
-              disabled={disabled}
+              disabled={disabled || limitReached}
             >
               {option.label}
             </button>

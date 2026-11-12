@@ -4,6 +4,24 @@ import { requireRole } from "@/lib/session";
 import { getConversation, startConversation } from "@/services/conversations";
 import { serializeChatMessage } from "@/services/chat";
 import { redirect } from "next/navigation";
+import { createChatDraftService } from "@/services/chat-drafts";
+import { ticketFactory } from "@/services/tickets";
+import { db } from "@/lib/db";
+
+export async function actOnDraft(
+  conversationId: string,
+  draftId: string,
+  action: "confirm" | "cancel",
+) {
+  const user = await requireRole("EMPLOYEE");
+  const message = await createChatDraftService(db, ticketFactory)(
+    user.id,
+    conversationId,
+    draftId,
+    action,
+  );
+  return serializeChatMessage(message);
+}
 
 export async function refreshConversation(conversationId: string) {
   const user = await requireRole("EMPLOYEE");

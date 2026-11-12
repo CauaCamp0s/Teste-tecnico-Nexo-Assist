@@ -8,6 +8,7 @@ import {
   sendMessage,
   refreshConversation,
   newConversation,
+  actOnDraft,
 } from "./actions";
 import { ActivityLine, DecisionDetails } from "./decision-details";
 import styles from "./chat.module.css";
@@ -82,6 +83,26 @@ export function ChatView({
         ? current
         : [...current, message],
     );
+  }
+
+  async function handleDraft(id: string, action: "confirm" | "cancel") {
+    if (locked.current || paused) return;
+    locked.current = true;
+    setPhase("sending");
+    setError(null);
+    try {
+      await actOnDraft(conversationId, id, action);
+      const result = await refreshConversation(conversationId);
+      setMessages(result.messages);
+      setCurrentStatus(result.status);
+    } catch {
+      setError(
+        "Não foi possível confirmar o resultado. Atualize a conversa; repetir a mesma confirmação é seguro.",
+      );
+    } finally {
+      locked.current = false;
+      setPhase("idle");
+    }
   }
 
   async function getReply(messageId: string) {
@@ -224,7 +245,9 @@ export function ChatView({
               {message.payload && (
                 <MessagePayload
                   payload={message.payload}
-                  disabled={busy || paused || cannotSend}
+                  onDraft={handleDraft}
+                  disabled={busy || paused}
+                  limitReached={cannotSend}
                   onOption={(text) => {
                     setDraft(text);
                     input.current?.focus();
