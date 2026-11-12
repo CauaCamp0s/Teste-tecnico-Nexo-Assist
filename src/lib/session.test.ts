@@ -12,6 +12,17 @@ const cookieStore = vi.hoisted(() => ({
 }));
 
 vi.mock("next/headers", () => ({ cookies: async () => cookieStore }));
+vi.mock("next/font/google", () => ({
+  Schibsted_Grotesk: () => ({ className: "chat-font" }),
+}));
+vi.mock("@/services/conversations", () => ({
+  getOrCreateConversation: vi.fn(async () => ({ id: "conversation" })),
+  getConversation: vi.fn(async () => ({
+    id: "conversation",
+    status: "AGENT",
+    messages: [],
+  })),
+}));
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
     throw new Error(`redirect:${path}`);

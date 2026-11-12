@@ -309,6 +309,33 @@ test("não persiste resposta se o analista assumir durante a geração", async (
   ).toBe(0);
 });
 
+test("não persiste resposta obsoleta quando outra aba envia durante a geração", async () => {
+  let calls = 0;
+  const model = new MastraLanguageModelV2Mock({
+    doGenerate: async () => {
+      if (++calls === 1) return tool("VPN erro 809");
+      await db.message.create({
+        data: {
+          conversationId,
+          authorId: employeeId,
+          role: "EMPLOYEE",
+          content: "Atualização enviada em outra aba",
+        },
+      });
+      return text(assessment);
+    },
+  });
+  await expect(respond(employeeId, conversationId, model)).rejects.toThrow(
+    "novas mensagens",
+  );
+  expect(
+    await db.message.count({ where: { conversationId, role: "AGENT" } }),
+  ).toBe(0);
+  expect(
+    await db.message.count({ where: { conversationId, role: "EMPLOYEE" } }),
+  ).toBe(2);
+});
+
 test.each(["json", "schema"])(
   "persiste contingência após duas respostas inválidas: %s",
   async (kind) => {

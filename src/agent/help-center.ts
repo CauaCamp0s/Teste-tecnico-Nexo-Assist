@@ -216,6 +216,15 @@ export async function respondToConversation(
   }
 
   return db.$transaction(async (tx) => {
+    const latest = await tx.message.findFirst({
+      where: { conversationId, conversation: { employeeId } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    if (latest?.id !== conversation.messages.at(-1)?.id) {
+      throw new Error(
+        "A conversa recebeu novas mensagens. Atualize para continuar.",
+      );
+    }
     const updated = await tx.conversation.updateMany({
       where: { id: conversationId, employeeId, status: "AGENT" },
       data: { updatedAt: new Date() },

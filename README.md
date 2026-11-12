@@ -44,4 +44,4 @@ Use `npm run format` para formatar os arquivos e `npm run test:watch` para execu
 
 ## Estado atual
 
-Login com sessão persistida e rotas protegidas por papel. As telas de chat e console são iniciais; as funcionalidades de atendimento serão adicionadas em etapas.
+Login com sessão persistida e rotas protegidas por papel. O chat segue as Telas 2 e 3 do protótipo, com histórico persistido, consultas visíveis acima das respostas e registro de decisões expansível. A mensagem do funcionário é salva antes da geração; o indicador “pensando” acompanha a espera. Falhas aparecem sem apagar o histórico, e mensagens pendentes podem solicitar uma resposta novamente. Ainda não há cards de chamado; o console será implementado em outra etapa.
