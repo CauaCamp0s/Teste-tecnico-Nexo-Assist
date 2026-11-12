@@ -1,4 +1,9 @@
-import { ConversationStatus, type PrismaClient } from "@prisma/client";
+import {
+  ConversationStatus,
+  type PrismaClient,
+  type Prisma,
+  type Conversation,
+} from "@prisma/client";
 import { z } from "zod";
 import type { TicketService } from "./tickets/types";
 import { transitionConversation } from "./conversation-state";
@@ -15,7 +20,135 @@ export function createAnalystService(
     )
       throw new Error("Acesso restrito a analistas.");
   }
+  async function withAssignedConversation<Result>(
+    analystId: string,
+    conversationId: string,
+    execute: (
+      tx: Prisma.TransactionClient,
+      conversation: Conversation,
+    ) => Promise<Result>,
+  ) {
+    await authorize(analystId);
+    return database.$transaction(async (tx) => {
+      const conversation = await tx.conversation.findUnique({
+        where: { id: conversationId },
+      });
+      if (!conversation) throw new Error("Conversa não encontrada.");
+      if (
+        conversation.status !== "ANALYST" ||
+        conversation.analystId !== analystId
+      )
+        throw new Error("Assuma este atendimento antes de executar a ação.");
+      return execute(tx, conversation);
+    });
+  }
+  function recordEvent(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    analystId: string,
+    content: string,
+    role: "SYSTEM" | "ANALYST" = "SYSTEM",
+  ) {
+    return tx.message.create({
+      data: { conversationId, authorId: analystId, role, content },
+    });
+  }
+  async function assume(analystId: string, conversationId: string) {
+    await authorize(analystId);
+    return database.$transaction(async (tx) => {
+      const conversation = await tx.conversation.findUnique({
+        where: { id: conversationId },
+      });
+      if (!conversation) throw new Error("Conversa não encontrada.");
+      if (
+        conversation.status !== "WAITING_FOR_ANALYST" ||
+        conversation.analystId
+      )
+        throw new Error("Conversa não disponível para assumir.");
+      await transitionConversation(
+        tx,
+        conversationId,
+        conversation.employeeId,
+        conversation.status,
+        "ANALYST",
+      );
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { analystId },
+      });
+      return recordEvent(
+        tx,
+        conversationId,
+        analystId,
+        "Um analista assumiu o atendimento. Assistente pausado.",
+      );
+    });
+  }
+  async function reply(
+    analystId: string,
+    conversationId: string,
+    content: string,
+  ) {
+    return withAssignedConversation(analystId, conversationId, async (tx) => {
+      const text = z.string().trim().min(1).max(4000).parse(content);
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      });
+      return recordEvent(tx, conversationId, analystId, text, "ANALYST");
+    });
+  }
+  async function returnToAgent(analystId: string, conversationId: string) {
+    return withAssignedConversation(
+      analystId,
+      conversationId,
+      async (tx, conversation) => {
+        await transitionConversation(
+          tx,
+          conversationId,
+          conversation.employeeId,
+          "ANALYST",
+          "AGENT",
+        );
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { analystId: null },
+        });
+        return recordEvent(
+          tx,
+          conversationId,
+          analystId,
+          "Atendimento devolvido ao assistente.",
+        );
+      },
+    );
+  }
+  async function close(analystId: string, conversationId: string) {
+    return withAssignedConversation(
+      analystId,
+      conversationId,
+      async (tx, conversation) => {
+        await transitionConversation(
+          tx,
+          conversationId,
+          conversation.employeeId,
+          "ANALYST",
+          "CLOSED",
+        );
+        return recordEvent(
+          tx,
+          conversationId,
+          analystId,
+          "Atendimento encerrado pelo analista.",
+        );
+      },
+    );
+  }
   return {
+    assume,
+    reply,
+    returnToAgent,
+    close,
     async list(analystId: string, status?: ConversationStatus) {
       await authorize(analystId);
       if (status) z.enum(ConversationStatus).parse(status);
@@ -53,67 +186,17 @@ export function createAnalystService(
       action: "assume" | "reply" | "return" | "close",
       content?: string,
     ) {
-      await authorize(analystId);
       z.enum(["assume", "reply", "return", "close"]).parse(action);
-      const text =
-        action === "reply"
-          ? z.string().trim().min(1).max(4000).parse(content)
-          : "";
-      return database.$transaction(async (tx) => {
-        const c = await tx.conversation.findUnique({ where: { id } });
-        if (!c) throw new Error("Conversa não encontrada.");
-        if (action === "assume") {
-          if (c.status !== "WAITING_FOR_ANALYST" || c.analystId)
-            throw new Error("Conversa não disponível para assumir.");
-          await transitionConversation(
-            tx,
-            id,
-            c.employeeId,
-            c.status,
-            "ANALYST",
-          );
-          await tx.conversation.update({ where: { id }, data: { analystId } });
-        } else {
-          if (c.status !== "ANALYST" || c.analystId !== analystId)
-            throw new Error(
-              "Assuma este atendimento antes de executar a ação.",
-            );
-          if (action === "reply")
-            await tx.conversation.update({
-              where: { id },
-              data: { updatedAt: new Date() },
-            });
-          else {
-            await transitionConversation(
-              tx,
-              id,
-              c.employeeId,
-              "ANALYST",
-              action === "return" ? "AGENT" : "CLOSED",
-            );
-            if (action === "return")
-              await tx.conversation.update({
-                where: { id },
-                data: { analystId: null },
-              });
-          }
-        }
-        return tx.message.create({
-          data: {
-            conversationId: id,
-            authorId: analystId,
-            role: action === "reply" ? "ANALYST" : "SYSTEM",
-            content:
-              action === "reply"
-                ? text
-                : action === "assume"
-                  ? "Um analista assumiu o atendimento. Assistente pausado."
-                  : action === "return"
-                    ? "Atendimento devolvido ao assistente."
-                    : "Atendimento encerrado pelo analista.",
-          },
-        });
-      });
+      switch (action) {
+        case "assume":
+          return assume(analystId, id);
+        case "reply":
+          return reply(analystId, id, content ?? "");
+        case "return":
+          return returnToAgent(analystId, id);
+        case "close":
+          return close(analystId, id);
+      }
     },
   };
 }

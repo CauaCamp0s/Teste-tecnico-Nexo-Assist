@@ -80,10 +80,10 @@ export function createChatDraftService(
           },
         });
         if (previous) return previous;
-        const c = await tx.conversation.findFirst({
+        const conversation = await tx.conversation.findFirst({
           where: { id: conversationId, employeeId, status: "AGENT" },
         });
-        if (!c)
+        if (!conversation)
           throw new TicketError(
             "INVALID_STATE",
             "A conversa não está com o assistente.",

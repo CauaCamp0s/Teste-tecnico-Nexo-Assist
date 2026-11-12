@@ -21,7 +21,7 @@ export function createEmployeeTicketTools(
     try {
       const tickets = number
         ? [await service.get(employeeId, number)].filter(
-            (t): t is EmployeeTicket => !!t,
+            (ticket): ticket is EmployeeTicket => !!ticket,
           )
         : await service.list(employeeId, {
             statuses: [
@@ -42,8 +42,8 @@ export function createEmployeeTicketTools(
           summary: tickets.length
             ? tickets
                 .map(
-                  (t) =>
-                    `${t.number}: ${t.title}, ${t.status}, prazo ${t.dueAt?.toISOString() ?? "não pendente"}${t.isOverdue ? ", vencido" : ""}`,
+                  (ticket) =>
+                    `${ticket.number}: ${ticket.title}, ${ticket.status}, prazo ${ticket.dueAt?.toISOString() ?? "não pendente"}${ticket.isOverdue ? ", vencido" : ""}`,
                 )
                 .join("; ")
             : "Nenhum chamado próprio encontrado.",
@@ -107,9 +107,9 @@ export function createEmployeeTicketTools(
       );
       const payload: ChatPayload = { tickets: observed.map(ticketCard) };
       if (observed.length > 1) {
-        payload.options = observed.map((t) => ({
-          label: `${t.number} · ${t.title}`,
-          value: t.number,
+        payload.options = observed.map((ticket) => ({
+          label: `${ticket.number} · ${ticket.title}`,
+          value: ticket.number,
         }));
         return {
           content: "Encontrei estes chamados. Sobre qual deles quer saber?",

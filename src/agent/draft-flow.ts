@@ -32,7 +32,10 @@ export function createDraftFlow(
           articleIds: [],
           summary:
             candidates
-              .map((t) => `${t.number}: ${t.title} (${t.status})`)
+              .map(
+                (ticket) =>
+                  `${ticket.number}: ${ticket.title} (${ticket.status})`,
+              )
               .join("; ") || "Nenhum candidato próprio.",
         },
       });
@@ -144,7 +147,7 @@ export function createDraftFlow(
         };
       }
       const match = candidates?.find(
-        (t) => t.number === proposal.duplicate?.number,
+        (ticket) => ticket.number === proposal.duplicate?.number,
       );
       if (
         proposal.duplicate?.relation === "same" &&
@@ -220,9 +223,9 @@ export function createDraftFlow(
           payload: {
             tickets: candidates.map(ticketCard),
             options: [
-              ...candidates.map((t) => ({
-                label: `${t.number} · ${t.title}`,
-                value: `É o mesmo problema do ${t.number}`,
+              ...candidates.map((ticket) => ({
+                label: `${ticket.number} · ${ticket.title}`,
+                value: `É o mesmo problema do ${ticket.number}`,
               })),
               {
                 label: "É outro problema",

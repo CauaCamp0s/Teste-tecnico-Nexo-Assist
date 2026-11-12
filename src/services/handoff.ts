@@ -15,25 +15,27 @@ export async function handoffConversation(
   relatedNumber?: string | null,
   legacyUnavailable = false,
 ) {
-  const previousCards = messages.flatMap((m) => {
-    const cards = (m.payload as ChatPayload | null)?.tickets;
+  const previousCards = messages.flatMap((message) => {
+    const cards = (message.payload as ChatPayload | null)?.tickets;
     return cards?.length === 1 ? cards : [];
   });
   const number = relatedNumber ?? previousCards.at(-1)?.number;
   const related = number
     ? await tx.ticket.findFirst({ where: { employeeId, number } })
     : null;
-  const previousDecisions = messages.flatMap((m) =>
-    m.decisionRecord ? [m.decisionRecord as unknown as DecisionRecord] : [],
+  const previousDecisions = messages.flatMap((message) =>
+    message.decisionRecord
+      ? [message.decisionRecord as unknown as DecisionRecord]
+      : [],
   );
   const summary = [
     `Motivo: ${record.reason}`,
     `Relato: ${messages
-      .filter((m) => m.role === "EMPLOYEE")
-      .map((m) => m.content)
+      .filter((message) => message.role === "EMPLOYEE")
+      .map((message) => message.content)
       .join(" | ")}`,
-    `Consultas: ${[...previousDecisions, record].flatMap((r) => r.consultations.map((c) => `${c.tool}: ${c.result.summary}`)).join(" | ")}`,
-    `Decisões: ${[...previousDecisions, record].map((r) => `${r.decision}: ${r.reason}`).join(" | ")}`,
+    `Consultas: ${[...previousDecisions, record].flatMap((decision) => decision.consultations.map((consultation) => `${consultation.tool}: ${consultation.result.summary}`)).join(" | ")}`,
+    `Decisões: ${[...previousDecisions, record].map((decision) => `${decision.decision}: ${decision.reason}`).join(" | ")}`,
     `Chamado relacionado: ${related?.number ?? "nenhum chamado próprio identificado"}`,
     legacyUnavailable
       ? "Legado indisponível: transferência do chamado não concluída."
