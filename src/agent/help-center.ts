@@ -70,7 +70,7 @@ export async function respondToConversation(
     )
     .map((message) => ({
       role: message.role === "EMPLOYEE" ? "user" : "assistant",
-      content: message.content,
+      content: `${message.content}${(message.payload as ChatPayload | null)?.tickets?.length ? `\nChamados consultados/confirmados nesta mensagem (dados): ${JSON.stringify((message.payload as ChatPayload).tickets)}` : ""}`,
     }));
   const consultations: Consultation[] = [];
   const latestEmployee = conversation.messages.findLast(
@@ -80,6 +80,11 @@ export async function respondToConversation(
     .slice(0, conversation.messages.indexOf(latestEmployee!))
     .findLast((message) => message.role === "AGENT");
   const previousPayload = previousAgent?.payload as ChatPayload | null;
+  const hasActiveTicketContext = conversation.messages.some((message) =>
+    (message.payload as ChatPayload | null)?.tickets?.some(
+      (ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status),
+    ),
+  );
   const selection = latestEmployee?.content.trim();
   const offered =
     previousPayload?.pendingProposal &&
@@ -176,6 +181,7 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
+      "História de complemento: se o funcionário acrescentar um teste, resultado ou detalhe sobre um chamado ativo já citado/confirmado ou identificado nos candidatos, preencha ticketUpdate={number} mesmo sem pedido literal de atualizar. Exemplo: após criar 'Monitor não liga', 'O monitor continua sem ligar, testei em outra tomada e também não funcionou' é complemento do mesmo chamado. Não trate como dúvida da central nem peça novamente impacto/interrupção. O código usa a nova mensagem como descrição, reaproveita a classificação do chamado e monta UPDATE para confirmação. Se não souber o número, planeje find_duplicate_candidates e escolha somente uma correspondência segura; se ambíguo, peça seleção. Consulta de status, agradecimento e problema diferente não são complemento. " +
       "Primeiro classifique a intenção e proponha consultas em consultationPlan (no máximo duas). Não chame ferramentas diretamente. Cada entrada tem tool e query para search_help_center, subject opcional para list_tickets, number para get_ticket; find_duplicate_candidates não precisa de campos adicionais. Fora de TI, consultationPlan deve ser vazio. O servidor valida o escopo ANTES de executar qualquer consulta. Após receber resultados, responda sem planejar novas consultas. " +
       "Preencha helpOutcome: question quando faltar condição do artigo, guidance ao orientar, ticket_required somente quando a condição do artigo exige chamado, not_applicable se o artigo não se aplica. Não marque ticket_required apenas porque houve uma falha de equipamento. " +
       "Priorize resolução sem fila. Para um problema de TI, consulte a central antes de iniciar coleta de chamado. Com artigo relevante, oriente primeiro e respeite suas condições: VPN 809 exige perguntar Windows 10 ou 11; no 10 oriente os passos, no 11 o artigo exige chamado. proposal=null enquanto faltar condição do artigo ou houver orientação aplicável ainda não tentada. Só inicie coleta quando houver pedido explícito de chamado, orientação sem resultado ou artigo inaplicável/exigindo chamado. " +
@@ -305,6 +311,17 @@ export async function respondToConversation(
                 await draftFlow.tool.execute!({}, {} as never);
             }
           }
+          if (
+            !consultations.length &&
+            !provisional.data.proposal &&
+            !provisional.data.ticketUpdate &&
+            !provisional.data.handoff?.requested &&
+            hasActiveTicketContext
+          ) {
+            // Omissão de ferramentas não descarta uma continuação de chamado.
+            // A segunda chamada interpreta a mensagem com candidatos atuais do proprietário.
+            await draftFlow.tool.execute!({}, {} as never);
+          }
           const emergency =
             provisional.success &&
             provisional.data.proposal?.interruption === "stopped" &&
@@ -315,16 +332,18 @@ export async function respondToConversation(
             !explicitTicket &&
             !emergency &&
             !guidanceFailed &&
+            !provisional.data.ticketUpdate &&
             !consultations.some(
               (consultation) => consultation.tool === "search_help_center",
             ) &&
             ((provisional.success &&
               provisional.data.understanding.intent === "ti" &&
               provisional.data.proposal) ||
-              consultations.some(
-                (consultation) =>
-                  consultation.tool === "find_duplicate_candidates",
-              ))
+              (!hasActiveTicketContext &&
+                consultations.some(
+                  (consultation) =>
+                    consultation.tool === "find_duplicate_candidates",
+                )))
           ) {
             await search.execute!({ query: employeeContext }, {} as never);
           }
@@ -335,11 +354,24 @@ export async function respondToConversation(
     assessment = answer;
     content = answer.answer;
     proposal = answer.proposal;
+    if ("ticketUpdate" in answer && answer.ticketUpdate && latestEmployee) {
+      proposal = {
+        title: null,
+        description: latestEmployee.content,
+        type: null,
+        category: null,
+        impact: null,
+        interruption: null,
+        sameDayCommitment: null,
+        duplicate: { relation: "same", number: answer.ticketUpdate.number },
+      };
+    }
     handoff = answer.handoff;
     if (
       !selectedProposal &&
       !explicitTicket &&
       !guidanceFailed &&
+      !("ticketUpdate" in answer && answer.ticketUpdate) &&
       consultedArticles.length
     ) {
       const vpn = consultedArticles.find(
@@ -412,7 +444,17 @@ export async function respondToConversation(
     );
   } else if (
     decisionRecord.decision === "pedir_detalhes" &&
-    assessment.understanding.intent === "ti"
+    assessment.understanding.intent === "ti" &&
+    !proposal &&
+    consultations.some(
+      (consultation) =>
+        consultation.tool === "search_help_center" &&
+        consultation.result.status === "success" &&
+        consultation.result.articleIds.length === 0,
+    ) &&
+    !consultations.some(
+      (consultation) => consultation.result.articleIds.length > 0,
+    )
   ) {
     content =
       "Não tenho informações suficientes na central de ajuda para orientar com segurança. Pode detalhar o problema e informar a mensagem de erro, se houver?";
@@ -421,12 +463,12 @@ export async function respondToConversation(
   const ticketPresentation = ticketTools.presentation(decisionRecord);
   // Texto livre pode orientar, mas não é comprovante de uma operação.
   if (
-    /\b(criei|criamos|criado|criada|abri|abrimos|aberto|aberta|atualizei|atualizamos|atualizado|atualizada|reabri|reaberto|transferi|transferido|transferida|encaminhei|encaminhado|encaminhada|cancelei|cancelado|created|transferred|updated)\b/i.test(
+    /\b(resolvi|resolvemos|criei|criamos|criado|criada|abri|abrimos|aberto|aberta|atualizei|atualizamos|atualizado|atualizada|reabri|reaberto|transferi|transferido|transferida|encaminhei|encaminhado|encaminhada|cancelei|cancelado|created|transferred|updated)\b/i.test(
       content,
     )
   ) {
     content =
-      "Posso orientar você com os artigos consultados. Para alterar um chamado, prepare e confirme um rascunho no chat.";
+      "Nenhuma alteração foi confirmada nesta resposta. Para alterar um chamado, confira e confirme um rascunho no chat.";
     decisionRecord.appliedRules.push(
       "Afirmação de operação em texto livre substituída: somente o código pode confirmar uma ação persistida.",
     );

@@ -71,6 +71,47 @@ export function createDraftFlow(
       record: DecisionRecord,
       selected = false,
     ) {
+      let existingUpdate: EmployeeTicket | undefined;
+      if (
+        proposal.duplicate?.relation === "same" &&
+        proposal.duplicate.number &&
+        proposal.description
+      ) {
+        if (candidates === undefined && !unavailable) await lookup();
+        existingUpdate = candidates?.find(
+          (ticket) =>
+            ticket.number === proposal.duplicate!.number &&
+            !["RESOLVED", "CLOSED"].includes(ticket.status),
+        );
+        if (existingUpdate) {
+          proposal = {
+            ...proposal,
+            title: existingUpdate.title,
+            type: existingUpdate.type,
+            category: existingUpdate.category,
+            impact: existingUpdate.impact,
+          };
+          record.appliedRules.push(
+            "Complemento de chamado ativo: reutilizar título, tipo, categoria, impacto e prioridade; não repetir coleta de abertura.",
+          );
+        }
+        if (unavailable) {
+          record.decision = "indisponivel";
+          return {
+            content:
+              "Não consegui consultar o chamado para preparar o complemento. Tente novamente em instantes.",
+            payload: {} as ChatPayload,
+          };
+        }
+        if (!existingUpdate && proposal.type === null) {
+          record.decision = "pedir_detalhes";
+          return {
+            content:
+              "Não encontrei esse chamado ativo entre os seus. Qual chamado você quer complementar?",
+            payload: {} as ChatPayload,
+          };
+        }
+      }
       const fields = [
         [
           "impact",
@@ -109,6 +150,11 @@ export function createDraftFlow(
       ] as const;
       for (const [field, question, options] of fields) {
         if (
+          existingUpdate &&
+          (field === "interruption" || field === "sameDayCommitment")
+        )
+          continue;
+        if (
           field === "sameDayCommitment" &&
           proposal.interruption === "stopped" &&
           proposal.sameDayCommitment === null
@@ -136,10 +182,16 @@ export function createDraftFlow(
         interruption: proposal.interruption!,
         sameDayCommitment: proposal.sameDayCommitment ?? false,
       };
-      const classification = classifyTicketPriority(context);
-      record.appliedRules.push(
-        `Prioridade ${classification.priority}: ${classification.reason} Contexto: ${context.impact}, ${context.interruption}, compromisso hoje: ${proposal.sameDayCommitment === null ? "não necessário para classificação" : context.sameDayCommitment ? "sim" : "não"}.`,
-      );
+      const classification = existingUpdate
+        ? {
+            priority: existingUpdate.priority,
+            reason: "Prioridade do chamado existente preservada.",
+          }
+        : classifyTicketPriority(context);
+      if (!existingUpdate)
+        record.appliedRules.push(
+          `Prioridade ${classification.priority}: ${classification.reason} Contexto: ${context.impact}, ${context.interruption}, compromisso hoje: ${proposal.sameDayCommitment === null ? "não necessário para classificação" : context.sameDayCommitment ? "sim" : "não"}.`,
+        );
       const compared = candidates !== undefined;
       if (!compared && !unavailable) await lookup();
       if (unavailable) {
@@ -272,6 +324,8 @@ export function createDraftFlow(
             if (kind === "REOPEN") assertCanReopen(fresh, clock());
             else if (["RESOLVED", "CLOSED"].includes(fresh.status))
               throw new Error("O chamado mudou de estado. Consulte novamente.");
+            if (existingUpdate)
+              existingUpdate = { ...existingUpdate, ...fresh };
           }
           // Só um rascunho pendente por conversa; revisão substitui o anterior sem executá-lo.
           await tx.ticketDraft.updateMany({
@@ -283,12 +337,12 @@ export function createDraftFlow(
             kind,
             targetNumber: target?.number,
             content: {
-              title: proposal.title!,
+              title: existingUpdate?.title ?? proposal.title!,
               description: proposal.description!,
-              type: target?.type ?? proposal.type!,
-              category: proposal.category!,
-              impact: proposal.impact!,
-              priority: classification.priority,
+              type: existingUpdate?.type ?? target?.type ?? proposal.type!,
+              category: existingUpdate?.category ?? proposal.category!,
+              impact: existingUpdate?.impact ?? proposal.impact!,
+              priority: existingUpdate?.priority ?? classification.priority,
             },
           });
           const sla = getTicketSla(

@@ -74,11 +74,18 @@ async function turn(
   content: string,
   answer: object = assessment,
   call?: { name: string; input: unknown },
+  options: {
+    employeeId?: string;
+    conversationId?: string;
+    followup?: object;
+  } = {},
 ) {
+  const employeeId = options.employeeId ?? f.ana;
+  const conversationId = options.conversationId ?? f.conversationId;
   await f.db.message.create({
     data: {
-      conversationId: f.conversationId,
-      authorId: f.ana,
+      conversationId,
+      authorId: employeeId,
       role: "EMPLOYEE",
       content,
     },
@@ -86,10 +93,12 @@ async function turn(
   const model = new MastraLanguageModelV2Mock({
     doGenerate: call
       ? [tool(call.name, call.input), text(answer)]
-      : text(answer),
+      : options.followup
+        ? [text(answer), text(options.followup)]
+        : text(answer),
   });
   const start = performance.now();
-  const message = await respond(f.ana, f.conversationId, model);
+  const message = await respond(employeeId, conversationId, model);
   expect(performance.now() - start).toBeLessThan(20000);
   expect(model.doGenerateCalls.length).toBeLessThanOrEqual(2);
   return {
@@ -249,6 +258,159 @@ test("abertura com uma pergunta até confirmação, sem urgência redundante nem
   });
   expect((savedCard.payload as ChatPayload).draft?.status).toBe("CONFIRMED");
 });
+
+test("Bruno cria monitor e acrescenta teste na mesma conversa: UPDATE sem repetir coleta e confirmação executa addUpdate", async () => {
+  const actor = { employeeId: f.bruno, conversationId: f.otherConversationId };
+  const opened = await turn(
+    "Quero abrir um chamado: meu monitor não liga. Só eu, tenho alternativa para trabalhar, sem compromisso hoje. É outro problema.",
+    {
+      ...assessment,
+      proposal: {
+        ...complete,
+        title: "Monitor não liga",
+        description: "Monitor não liga.",
+        category: "HARDWARE",
+        interruption: "degraded",
+        sameDayCommitment: false,
+      },
+    },
+    { name: "find_duplicate_candidates", input: {} },
+    actor,
+  );
+  const addUpdate = vi.fn();
+  const act = createChatDraftService(f.db, (tx) => {
+    const tickets = createTicketService(tx);
+    return {
+      ...tickets,
+      addUpdate: async (...args) => {
+        addUpdate(...args);
+        return tickets.addUpdate(...args);
+      },
+    };
+  });
+  const created = await act(
+    f.bruno,
+    f.otherConversationId,
+    opened.payload.draft!.id,
+    "confirm",
+  );
+  expect((created.payload as ChatPayload).tickets?.[0].number).toBe(
+    "INC-20316",
+  );
+  const before = await f.db.ticket.findUniqueOrThrow({
+    where: { number: "INC-20316" },
+  });
+  const information =
+    "O monitor continua sem ligar, testei em outra tomada e também não funcionou.";
+  const understood = {
+    ...assessment,
+    answer: "Posso acrescentar esse teste ao chamado.",
+    reason:
+      "O chamado INC-20316 já foi criado para o problema do monitor e o funcionário está apenas informando um novo teste",
+    proposal: null,
+    consultationPlan: [],
+  };
+  const update = await turn(information, understood, undefined, {
+    ...actor,
+    followup: { ...understood, ticketUpdate: { number: "INC-20316" } },
+  });
+  expect(update.model.doGenerateCalls).toHaveLength(2);
+  expect(
+    update.record.consultations.map((consultation) => consultation.tool),
+  ).toEqual(["find_duplicate_candidates"]);
+  expect(update.message.content).not.toMatch(
+    /central de ajuda|Quem está sendo afetado|Como isso afeta/,
+  );
+  expect(update.payload.draft).toMatchObject({
+    kind: "UPDATE",
+    title: before.title,
+    description: information,
+    type: before.type,
+    category: before.category,
+    priority: before.priority,
+    impact: before.impact,
+    status: "PENDING",
+  });
+  expect(addUpdate).not.toHaveBeenCalled();
+  expect(
+    (await f.db.ticket.findUniqueOrThrow({ where: { id: before.id } }))
+      .description,
+  ).toBe(before.description);
+  const confirmed = await act(
+    f.bruno,
+    f.otherConversationId,
+    update.payload.draft!.id,
+    "confirm",
+  );
+  expect(addUpdate).toHaveBeenCalledExactlyOnceWith(
+    f.bruno,
+    "INC-20316",
+    expect.objectContaining({
+      description: information,
+      priority: before.priority,
+      category: before.category,
+    }),
+    update.payload.draft!.id,
+  );
+  expect(
+    (confirmed.decisionRecord as unknown as DecisionRecord).executedActions,
+  ).toEqual(["Atualizou INC-20316."]);
+  expect(
+    (await f.db.ticket.findUniqueOrThrow({ where: { id: before.id } }))
+      .description,
+  ).toBe(`${before.description}\n\nAtualização:\n${information}`);
+  expect(await f.db.ticket.count()).toBe(10);
+  await act(
+    f.bruno,
+    f.otherConversationId,
+    update.payload.draft!.id,
+    "confirm",
+  );
+  expect(addUpdate).toHaveBeenCalledTimes(1);
+});
+
+test("sem busca de artigos não substitui uma pergunta contextual por contingência da central", async () => {
+  const result = await turn("Quero acrescentar informações ao meu chamado", {
+    ...assessment,
+    answer: "Qual informação você quer acrescentar?",
+  });
+  expect(result.message.content).toBe("Qual informação você quer acrescentar?");
+});
+
+test("complemento identificado nos candidatos reaproveita classificação sem coletar impacto", async () => {
+  const original = await f.db.ticket.findUniqueOrThrow({
+    where: { number: "INC-20311" },
+  });
+  const information = "Testei reiniciar o notebook, mas continua lento.";
+  const result = await turn(
+    information,
+    { ...assessment, ticketUpdate: { number: original.number } },
+    { name: "find_duplicate_candidates", input: {} },
+  );
+  expect(result.payload.draft).toMatchObject({
+    kind: "UPDATE",
+    description: information,
+    category: original.category,
+    priority: original.priority,
+    impact: original.impact,
+  });
+  expect(result.message.content).not.toContain("Quem está sendo afetado");
+});
+
+test.each(["INC-20315", "INC-20150", "INC-999999"])(
+  "complemento %s não permite alvo alheio, resolvido ou inexistente",
+  async (number) => {
+    const result = await turn("Testei outra tomada e não funcionou.", {
+      ...assessment,
+      ticketUpdate: { number },
+    });
+    expect(result.payload.draft).toBeUndefined();
+    expect(result.message.content).toContain(
+      "Não encontrei esse chamado ativo entre os seus",
+    );
+    expect(await f.db.ticketDraft.count()).toBe(0);
+  },
+);
 
 test("texto livre não confirma escrita inventada mesmo após consulta válida de artigo", async () => {
   const result = await turn(

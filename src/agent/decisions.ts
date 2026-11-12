@@ -32,6 +32,10 @@ export const answerSchema = assessmentSchema.extend({
     .enum(["question", "guidance", "ticket_required", "not_applicable"])
     .optional(),
   proposal: proposalSchema.nullable().optional(),
+  ticketUpdate: z
+    .object({ number: z.string().regex(/^(INC|REQ)-\d+$/) })
+    .nullable()
+    .optional(),
   handoff: z
     .object({ requested: z.boolean(), relatedNumber: z.string().nullable() })
     .nullable()
