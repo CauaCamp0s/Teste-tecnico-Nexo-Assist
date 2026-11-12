@@ -1,48 +1,10 @@
 # Nexo Assist
 
-## Etapa 4 — interpretações do protótipo e Anexo A
+Service desk de TI com assistente virtual, chamados simulados e atendimento humano. Implementa as Telas 1–5 do protótipo: identificação, chat e console do analista, com layout responsivo e histórico persistido.
 
-Na apresentação, registros omitem identificadores internos, mostram títulos retornados pelos artigos e números públicos dos chamados; datas são formatadas em pt-BR no fuso America/Sao_Paulo. O JSON técnico permanece persistido para diagnóstico.
+## Executar localmente
 
-`list_tickets` lista ativos por padrão (exclui RESOLVED/CLOSED) e aceita `subject`; o serviço filtra título/descrição no banco sempre junto ao proprietário. Um único resultado é exibido diretamente; dois ou mais pedem seleção. O serviço geral mantém a opção de listar todos para o painel do analista.
-
-Coleta otimizada: título, tipo e categoria são inferidos pelo modelo quando o relato permite. O servidor prioriza lacunas de impacto/interrupção e dispensa perguntar compromisso hoje quando interrupção total já define alta/crítica; essa dispensa fica registrada, sem fingir que o funcionário respondeu “não”.
-
-Correção: falha técnica do modelo (timeout, resposta inválida, 429/503 esgotado) mantém a conversa em AGENT com `modelFailure` e nova tentativa sobre a mesma mensagem, sem consumir o limite de 30. Segurança baixa só encaminha quando uma resposta válida identifica um problema de TI; saudações e intenção indefinida pedem contexto.
-
-O fluxo normal continua com até duas gerações; há reserva de 2 s do orçamento total de 20 s para persistência/backoff (geração limitada a 18 s). Recuperação de JSON e o único retry de 429/503 continuam excepcionais e dentro do mesmo orçamento. Alegações de escrita detectadas no texto livre são substituídas; as confirmações e encaminhamentos exibidos são redigidos pelo código após persistência. Não se transfere automaticamente o último item de uma lista ambígua. Uma referência resolvida fora da janela de reabertura pede autorização para preparar um novo chamado em vez de criar silenciosamente.
-
-Cada resposta mostra atividades observadas e um detalhe expansível com entendimento, fonte e resultado das consultas, decisão, ações realmente persistidas, regras (incluindo prioridade e SLA), segurança e motivo. O detalhe usa rótulos legíveis e listas, não JSON cru. Consultas não são apresentadas como alterações de estado, e falhas não recebem marca de execução bem-sucedida.
-
-Transferências: pedido explícito/aceite, contexto crítico calculado pelo código e segurança baixa encaminham a conversa e pausam o agent. Escopo externo continua sendo redirecionado. O resumo é montado com relatos, consultas/decisões persistidas e chamado próprio identificado. Se o legado esgotar tentativas, sua transação é desfeita e a conversa ainda entra na fila com aviso explícito de que o chamado não foi transferido. Chamados resolvidos/encerrados não são alterados ao encaminhar a conversa. Não se inventam equipe N1/N2 nem prazo de contato humano.
-
-Confirmar/Cancelar são server actions sem geração de modelo. Alteração, ledger de idempotência, resultado no histórico e atualização dos cards são atômicos. Repetir o mesmo botão devolve a mesma mensagem de resultado. Indisponibilidade preserva PENDING e informa que a tentativa não foi confirmada; erros definitivos exigem revisão. Os botões determinísticos continuam disponíveis ao atingir 30 mensagens (não consomem nova mensagem do funcionário).
-
-Coleta: o modelo extrai dados do histórico; o código pergunta um campo ausente por vez e calcula prioridade com `classifyTicketPriority`. O modelo compara candidatos consultados; sem consulta anterior ou com correspondência incerta, o servidor pede seleção. Um problema correspondente ativo vira complemento; resolvido elegível vira oferta de reabertura no card. Revisar dados cancela o rascunho pendente anterior e cria outro atomicamente com a resposta. O prazo no rascunho é uma previsão, recalculada na confirmação, não promessa de atendimento antes de uma reunião.
-
-Consultas do agent usam ferramentas sem parâmetro de identidade: `employeeId` fica no closure criado pelo servidor. Cards e ofertas de transferência por vencimento são derivados das consultas reais pelo código. Seleções rápidas preenchem o compositor para envio explícito. Cards persistem como retrato da consulta (datas reais, sem prometer horários ilustrativos do protótipo); a seleção consulta novamente. O payload estruturado suporta opções, chamados e rascunhos.
-
-O serviço do analista permite à equipe listar e ler a fila; somente o responsável que assumiu pode responder, devolver ou encerrar. Assunção é transacional e registra `analystId`. As server actions exigem `requireRole("ANALYST")`; o serviço também valida o papel no banco. O painel obtém chamados pelo proprietário persistido na conversa, nunca por um id fornecido pelo cliente. Os eventos de controle ficam no histórico como mensagens de sistema. Nenhum prazo ilustrativo de N1/N2 do protótipo é prometido.
-
-O limite conta as 30 mensagens do funcionário (inclusive ao analista), não respostas nem cliques determinísticos de confirmação. A 30ª recebe resposta normalmente; a 31ª é rejeitada em transação. Nova conversa não encerra nem remove atendimento pendente; o histórico fica acessível no menu. Em espera/atendimento humano, o funcionário pode acrescentar informações até o limite, mas o agent permanece pausado. O chat consulta atualizações a cada 3 segundos fora de AGENT. Encerramento é terminal; a devolução ao agent exige que um analista tenha assumido antes.
-
-### Transferência e disponibilidade do legado
-
-Quando a confirmação esgota as tentativas por `TicketUnavailableError`, o rascunho permanece `PENDING`, com `failureCode: UNAVAILABLE`, permitindo nova confirmação após a recuperação. Uma confirmação bem-sucedida limpa o código de falha; erros definitivos continuam marcando `FAILED`.
-
-`transfer(employeeId, number, summary, idempotencyKey)` encaminha um chamado próprio ativo para `WAITING_FOR_ANALYST`, persiste `transferSummary` e reinicia `lastUpdatedAt`. A chave persistida impede repetir a escrita após perda de resposta.
-
-`TICKET_SERVICE_OUTAGE_MS=0` desliga a simulação. Um inteiro positivo (por exemplo, `3000`) provoca uma única janela de indisponibilidade desde a primeira chamada do legado por processo; consultas e confirmações compartilham essa janela. Após o prazo, o serviço se recupera, sem reiniciar a janela a cada chamada. Reiniciar o processo reinicia a simulação.
-
-Todas as operações do ponto de entrada público têm três tentativas totais, com esperas de 500 ms e 1000 ms, somente para `TicketUnavailableError` (`code: UNAVAILABLE`). Ao esgotar, o erro mantém `attempts` e `mayHaveCommitted`: este último sinaliza possível escrita sem resposta, não confirmação de sucesso. Na confirmação de rascunhos, a transação externa ainda desfaz as escritas em caso de falha. Relógio, espera e falhas antes/depois da operação são injetáveis nos testes.
-
-Agente de atendimento para o service desk de TI da Nexo.
-
-## Desenvolvimento local
-
-Requisitos: Node.js >=22.13 e npm.
-
-Copie `.env.example` para `.env` e execute:
+Requisitos: Node.js >=22.13 e npm. Copie `.env.example` para `.env` e preencha `GOOGLE_GENERATIVE_AI_API_KEY` com uma chave do Google AI Studio.
 
 ```sh
 npm ci
@@ -50,52 +12,129 @@ npm run setup
 npm run dev
 ```
 
-O SQLite local será criado em `prisma/dev.db`. Acesse http://localhost:3000.
+Acesse http://localhost:3000. O SQLite padrão fica em `prisma/dev.db`. Sem chave, a interface e os serviços continuam acessíveis; solicitações ao modelo mostram indisponibilidade e permitem tentar novamente.
 
-O seed adiciona três funcionários, um analista, seis artigos e nove chamados, sem duplicar registros nem sobrescrever dados existentes. Os e-mails de exemplo estão em `prisma/seed-data.ts` e os chamados em `prisma/ticket-seed.ts`. As datas dos chamados são relativas à primeira execução que os insere; rodar o seed novamente preserva suas datas e eventuais alterações.
+### Contas de demonstração
 
-Para entrar, use `ana.souza@nexo.com.br` (funcionária) ou `rafael.lima@nexo.com.br` (analista) com qualquer senha não vazia, conforme o login de demonstração do desafio.
+Use qualquer senha não vazia. Trata-se do login simulado do desafio, não de autenticação corporativa real.
 
-O agent usa Mastra e Gemini 3.5 Flash-Lite (`LLM_MODEL=google/gemini-3.5-flash-lite`), escolhido pelo custo e latência menores e para viabilizar o uso na cota gratuita do projeto, sujeito aos limites do Google. Para subir de modelo Gemini compatível, basta trocar `LLM_MODEL`. O raciocínio usa `thinkingLevel: minimal` (o modelo escolhido deve suportar essa opção). Preencha `GOOGLE_GENERATIVE_AI_API_KEY` somente no `.env` para chamadas reais. Os testes usam modelo mockado. O histórico vem do SQLite; o registro de decisões fica em JSON junto à mensagem, sem memória do Mastra.
+| Papel       | E-mail                    |
+| ----------- | ------------------------- |
+| Funcionária | ana.souza@nexo.com.br     |
+| Funcionário | bruno.tavares@nexo.com.br |
+| Funcionária | carla.mendes@nexo.com.br  |
+| Analista    | rafael.lima@nexo.com.br   |
 
-Trade-off atual: a primeira chamada decide buscar ou responder diretamente; redirecionamentos e pedidos de contexto usam uma requisição. Quando há busca, uma segunda chamada recebe histórico e artigos como contexto, sem ferramentas nem mensagens de protocolo de ferramenta, e retorna JSON nativo. A primeira usa JSON via prompt para permitir a decisão de buscar. Isso mantém até duas chamadas normais, mas a decisão de não buscar assuntos fora de TI depende das instruções ao modelo. Defeitos concretos são TI mesmo sem detalhes; intenção indefinida é reservada a mensagens sem problema identificável. Consultas são capturadas pelo código e a segurança de orientações de TI nunca é alta sem artigo relevante.
+O analista entra pela mesma página e segue para `/console`; funcionários seguem para `/chat`. Sessões são persistidas, com cookie HttpOnly, SameSite e Secure em produção. Rotas e ações validam o papel no servidor.
 
-Retries automáticos estão desabilitados, inclusive os processadores padrão do Mastra (`errorProcessorDefaults: false`). Na versão 1.82.0, o `StreamErrorRetryProcessor` repetia falhas até duas vezes com espera de 3 s, independentemente de `maxRetries: 0`. Agora o código permite apenas uma nova tentativa por mensagem após HTTP 503/429, com espera cancelável de 1 s; etapa, status, espera e resultado ficam em `modelRetries`, separados de `executedActions`.
+O seed idempotente insere três funcionários, um analista, seis artigos e nove chamados. Não sobrescreve dados existentes. Ana tem os chamados do Anexo B (`INC-20311`, `REQ-10442`, `INC-20150`) e cenários adicionais de prazo, duplicidade e reabertura. Bruno e Carla permitem verificar isolamento. Datas são relativas à primeira inserção e preservadas nas execuções seguintes.
 
-JSON inválido ou fora do schema permite uma chamada extra de recuperação, sem ferramentas e com os resultados reais já consultados. O fluxo normal mantém até duas chamadas; recuperação de JSON e retry de indisponibilidade podem acrescentar uma chamada cada, dentro do orçamento compartilhado. Falha persistente, indisponibilidade do modelo ou timeout produz encaminhamento humano com segurança baixa, motivo e `modelFailure` registrados. O timeout protege contra falhas e não representa uma meta de latência. A latência do nível gratuito varia.
+## Execução em produção
 
-`src/agent/scenarios.test.ts` cobre ponta a ponta com modelo mockado e rede proibida: orientação por artigo, consulta/seleção, atraso/aceite, coleta até confirmação, duplicidade, reabertura elegível/expirada, pedido humano, criticidade, segurança baixa, fora de escopo, falhas e isolamento. Os testes de serviços complementam concorrência, limites, sessão/papel, rollback e perda de resposta. Rodadas reais são manuais, curtas e em SQLite temporário; sua saída não faz parte do repositório.
-
-## Chamados e prazos
-
-O módulo `src/services/tickets` concentra as regras do sistema legado simulado, separado do agent. Chamados INC/REQ têm proprietário, categoria, impacto, prioridade, status e datas persistidas. A classificação usa impacto e interrupção (`stopped`: sem conseguir trabalhar; `degraded`: há alternativa; `none`: pedido/melhoria) e compromisso no mesmo dia. Paralisação de equipe/empresa é crítica; de uma pessoa ou compromisso hoje é alta; trabalho prejudicado com alternativa é média; pedidos sem urgência são baixa.
-
-O SLA usa `America/Sao_Paulo`, segunda a sexta das 8h às 18h, sem feriados: crítica = 1 hora corrida; alta = 4 horas úteis; média = 30 horas úteis (3 dias); baixa = 50 horas úteis (5 dias). `createdAt` inicia a primeira resposta; cada atualização de negócio define `lastUpdatedAt` e reinicia o prazo. A data não muda automaticamente ao salvar metadados. Vencido significa `agora > prazo`; resolvidos e encerrados não têm prazo pendente. O cálculo usa Temporal para respeitar o fuso IANA, sem depender do fuso da máquina.
-
-Ana recebe os três chamados do Anexo B (`INC-20311`, `REQ-10442`, `INC-20150`) e mais quatro cenários: VPN aberta e vencida, impressora resolvida há 2 dias, software resolvido há 12 dias e requisição recente dentro do prazo. Bruno e Carla possuem um chamado cada para verificar isolamento entre funcionários. Os exemplos cobrem as quatro prioridades.
-
-O ponto de entrada do legado simulado é `ticketService`, em `src/services/tickets/index.ts`, com contrato `TicketService`: `list(employeeId, { statuses? })` e `get(employeeId, number)`. O funcionário deve vir da sessão autenticada, nunca do modelo. Toda consulta filtra o proprietário no banco; número alheio e inexistente retornam `null`, e identidade ausente é rejeitada. Sem filtro de status, a lista inclui todos os chamados próprios, dos mais recentes aos mais antigos pela abertura. O retorno inclui `dueAt` e `isOverdue`, calculados na leitura sem alterar as datas persistidas. O adaptador SQLite e seu relógio podem ser substituídos sem alterar o contrato.
-
-`ticketDraftService` persiste rascunhos completos de criação, complemento e reabertura, com estados pendente, confirmado, cancelado ou falhou. `confirmTicketDraft` e `cancelTicketDraft` (`tickets/confirmation.ts`) obtêm a identidade da sessão; não usam LLM. A confirmação revalida conversa e alvo, e grava alteração, chave de idempotência e resultado do rascunho em uma transação. Cancelados/falhos não podem ser confirmados; é necessário um novo rascunho. Repetir uma confirmação concluída devolve o mesmo chamado.
-
-As escritas do legado (`create`, `addUpdate`, `reopen`) exigem chave de idempotência: a confirmação usa o id do rascunho. Chave repetida com conteúdo diferente é rejeitada. Complementos preservam a descrição anterior e reiniciam `lastUpdatedAt`; o tipo INC/REQ de um chamado existente não muda. A numeração nova começa em 100001 por tipo, em contador transacional separado da faixa dos exemplos. Estas funções ainda não têm rota HTTP ou interface.
-
-`findDuplicateCandidates(employeeId)` retorna chamados próprios ativos e resolvidos há até 7 dias corridos (168 horas, limite inclusivo), para comparação posterior pelo agent; não presume similaridade nem altera dados. Encerrados, resoluções ausentes/futuras e resolvidos mais antigos ficam fora. `reopen` exige status `RESOLVED` e a mesma janela, revalidada também ao confirmar o rascunho. Reabertura limpa `resolvedAt`, retorna a `OPEN` e reinicia o prazo.
-
-## Verificações
+Configure as variáveis de `.env.example` no ambiente, prepare um volume gravável e use `DATABASE_URL=file:/data/nexo.db` para persistência. Execute:
 
 ```sh
-npm run typecheck
+npm ci --include=dev
+npm run db:generate
+npm run build
+npm start
+```
+
+`npm start` executa, em sequência, `prisma migrate deploy`, seed idempotente e `next start`. Falha em uma etapa impede iniciar a seguinte. Prisma CLI, tsx e dotenv precisam estar instalados também na execução. Use HTTPS para os cookies de produção. O build das fontes via `next/font/google` requer acesso ao Google Fonts.
+
+| Variável                       | Uso                                                              |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `DATABASE_URL`                 | SQLite local ou caminho absoluto em volume persistente           |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Credencial do provedor, somente no servidor                      |
+| `LLM_MODEL`                    | Padrão `google/gemini-3.5-flash-lite`                            |
+| `TICKET_SERVICE_OUTAGE_MS`     | Janela simulada de falha do legado; `0` desliga                  |
+| `AGENT_RATE_LIMIT_MAX`         | Gerações por janela, padrão `10`                                 |
+| `AGENT_RATE_LIMIT_WINDOW_MS`   | Duração da janela, padrão `60000` ms                             |
+| `TRUST_PROXY`                  | `true` habilita limite adicional por `x-forwarded-for` confiável |
+| `PORT`                         | Porta HTTP, padrão `3000`                                        |
+
+O limite é aplicado antes da geração, inclui novas tentativas e preserva a mensagem já salva. Usa contadores por sessão e, com `TRUST_PROXY=true`, por IP. Habilite essa opção somente atrás de proxy que sobrescreva `x-forwarded-for` e impeça acesso direto à aplicação. Sem proxy confiável, o Next não fornece IP direto nas server actions e o limite fica por sessão. Os contadores são locais ao processo, expiram e reiniciam com ele; não substituem proteção distribuída. Esta entrega prepara a execução, sem realizar deploy.
+
+## Arquitetura
+
+```text
+Interface Next.js/React
+  → Server actions: sessão, papel e limite de requisições
+    → Serviços de conversa, analista e confirmação
+    → Agent Mastra: interpretação e proposta estruturada
+      → Ferramentas de consulta com identidade fixada pelo servidor
+        → Central de ajuda e serviço de chamados simulado
+          → Prisma / SQLite
+```
+
+- `src/app`: login, chat, console, carregamento e recuperação de erros. O console consulta atualizações a cada três segundos; o chat acompanha atendimento humano com o mesmo intervalo.
+- `src/agent`: instruções, schema Zod, ferramentas, coleta, decisões e orçamento de geração. O histórico vem do banco, sem memória paralela do Mastra.
+- `src/services`: conversas, autenticação, atendimento humano e confirmação de rascunhos.
+- `src/services/tickets`: contrato do legado simulado, regras de propriedade, prioridade, SLA, duplicidade, idempotência e disponibilidade.
+- `prisma`: schema, migrações e seed. Mensagens, decisões, rascunhos, sessões e operações ficam persistidos.
+
+Stack: Next.js 16, React 19, TypeScript estrito, Prisma 6/SQLite, Mastra 1.82, Zod e Vitest. O adaptador do serviço de chamados pode ser substituído mantendo seu contrato.
+
+## Como o agent decide
+
+**O modelo interpreta e propõe; o código executa e impõe as regras.**
+
+1. A mensagem do funcionário é persistida antes de chamar o modelo. As ferramentas recebem `employeeId` pelo closure criado com a sessão autenticada; o modelo não escolhe o proprietário.
+2. O modelo identifica a intenção e consulta artigos ou chamados. `list_tickets` lista ativos por padrão e aceita assunto, pesquisado no título/descrição pelo serviço. Um resultado é exibido diretamente; dois ou mais pedem seleção. Toda consulta filtra o proprietário no banco.
+3. Para abertura, o modelo infere título, tipo e categoria quando possível. O código prioriza lacunas de impacto e interrupção, uma pergunta por vez. Não pergunta compromisso hoje quando interrupção total já define alta/crítica.
+4. A prioridade é calculada no servidor: paralisação de equipe/empresa é crítica; paralisação individual ou compromisso hoje é alta; trabalho prejudicado com alternativa é média; pedido sem urgência é baixa. O modelo não determina livremente a prioridade.
+5. Antes da escrita, candidatos próprios são consultados. Correspondência ativa gera proposta de complemento; resolvido elegível gera proposta de reabertura. Incerteza pede esclarecimento. Referência resolvida fora da janela não cria silenciosamente outro chamado.
+6. O funcionário confere o rascunho e confirma ou cancela. Essas ações não usam modelo. A confirmação revalida alvo, estado e propriedade, e grava alteração, chave de idempotência, resultado e histórico em transação. Repetir a confirmação devolve o mesmo resultado. Editar prepara outro rascunho e cancela o anterior.
+
+Cada resposta registra entendimento, consultas e resultados, decisão, ações efetivamente persistidas, regras, segurança e motivo. A interface mostra títulos, números públicos e datas em pt-BR/São Paulo; o JSON técnico permanece no banco. Consultas não aparecem como alterações, e alegações de escrita no texto livre são substituídas por mensagens controladas pelo código.
+
+### Prazos, reabertura e transferência
+
+- Horário útil: segunda a sexta, 08h–18h, `America/Sao_Paulo`, sem feriados. Crítica: uma hora corrida; alta: quatro horas úteis; média: 30 horas úteis; baixa: 50 horas úteis.
+- Abertura inicia o prazo; atualização de negócio reinicia a contagem em `lastUpdatedAt`. Metadados não reiniciam SLA. O prazo do rascunho é previsão, recalculada na confirmação.
+- Vencido significa `agora > prazo`; resolvidos/encerrados não têm prazo pendente. Vencimento **oferece** transferência, não transfere automaticamente.
+- Reabertura exige `RESOLVED` há no máximo sete dias corridos (168 horas, limite inclusivo), validado novamente na confirmação.
+- Pedido humano, criticidade calculada ou segurança baixa sobre um problema de TI identificado encaminham a conversa e pausam o agent. Saudações e intenção indefinida não transferem por baixa segurança. RH, financeiro e facilities recebem redirecionamento de escopo.
+- O resumo da transferência reúne relatos, consultas, decisões e chamado relacionado. Somente o analista responsável pode responder, devolver ao agent ou encerrar; assumir é transacional. Encerrar conversa não equivale a encerrar chamado.
+
+## Modelo, custo e disponibilidade
+
+Foi mantido `google/gemini-3.5-flash-lite`, visando baixa latência e custo para o fluxo de atendimento. O uso de cota gratuita depende da disponibilidade e dos limites do projeto Google. Não há preço fixo por mensagem: o custo depende dos tokens de entrada/saída e da tabela do provedor.
+
+O fluxo normal usa uma chamada para interpretar/consultar e, havendo consulta, outra para responder com os resultados: aproximadamente duas chamadas por mensagem. Respostas diretas podem usar uma; confirmar/cancelar e ações do analista usam zero. O histórico aumenta o consumo de entrada. Usa-se `thinkingLevel: minimal`; trocar `LLM_MODEL` exige um modelo compatível com essa opção e com a saída estruturada.
+
+A geração tem orçamento compartilhado de 18 segundos, reservando dois segundos do orçamento de resposta de 20 segundos para persistência/backoff. Não é garantia de latência externa. Retries automáticos do SDK/Mastra estão desligados. Há uma nova tentativa para 429/503, com espera cancelável de um segundo, e uma recuperação excepcional de JSON inválido, dentro do mesmo orçamento; podem acrescentar uma chamada cada. Essas ocorrências ficam registradas separadamente das ações executadas.
+
+Falha técnica, timeout ou JSON persistentemente inválido mantém a conversa em `AGENT`, registra `modelFailure` e permite tentar novamente a mesma mensagem sem gastar outra das 30 mensagens. Falha do provedor não é tratada como insegurança sobre o problema de TI.
+
+### Simular falha do serviço de chamados
+
+Defina `TICKET_SERVICE_OUTAGE_MS=3000` e reinicie a aplicação. A primeira chamada ao legado inicia uma única janela de indisponibilidade por processo. Consultas e confirmações compartilham essa janela; o serviço se recupera após o prazo. `0` desliga.
+
+O ponto de entrada público tenta até três vezes, com esperas de 500 e 1000 ms, apenas para indisponibilidade. Falha de confirmação mantém o rascunho `PENDING`, permitindo nova tentativa; erro definitivo marca `FAILED`. Escritas usam chave de idempotência e transação para evitar duplicação após perda de resposta. Se a transferência do chamado falhar, a conversa ainda pode entrar na fila, com aviso de que o chamado não foi alterado. No console, a falha do painel de chamados preserva histórico e controles.
+
+## Qualidade e verificações
+
+```sh
 npm run lint
 npm run format:check
+npm run typecheck
 npm test
 npm run build
 ```
 
-Para executar a versão compilada, use `npm start` após o build.
+A suíte atual tem 211 testes em 29 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
 
-Use `npm run format` para formatar os arquivos e `npm run test:watch` para executar testes durante o desenvolvimento. O ESLint usa as regras de Next.js e TypeScript; o Prettier cuida da formatação.
+As Telas 1–5 também foram verificadas em navegador desktop/celular, incluindo assumir/responder e entrega por atualização periódica, com banco temporário. Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
 
-## Estado atual
+## Interpretações e trade-offs
 
-Login com sessão persistida e rotas protegidas por papel. O chat segue as Telas 2 e 3 do protótipo, com histórico persistido, consultas visíveis acima das respostas e registro de decisões expansível. A mensagem do funcionário é salva antes da geração; o indicador “pensando” acompanha a espera. Falhas aparecem sem apagar o histórico, e mensagens pendentes podem solicitar uma resposta novamente. Ainda não há cards de chamado; o console será implementado em outra etapa.
+- O limite de 30 conta mensagens do funcionário, inclusive ao analista. A 30ª recebe resposta; a 31ª é rejeitada em transação. Confirmações determinísticas continuam disponíveis. Nova conversa preserva atendimentos anteriores.
+- O assistente fica pausado na fila e durante atendimento humano; o funcionário ainda pode acrescentar contexto até o limite. Devolução exige que um analista tenha assumido. Conversa encerrada é terminal.
+- Cards no histórico são retratos de consultas reais. O painel do analista é atualizado periodicamente. Não são prometidos prazos ilustrativos de contato N1/N2.
+- Perfil ficou fora do escopo; números ilustrativos do protótipo não são exibidos como métricas reais. Login da demonstração aceita qualquer senha conforme solicitado.
+- SQLite e contadores em memória simplificam a execução em uma instância com volume. Para múltiplas réplicas seriam necessários banco compartilhado, limite distribuído e coordenação de inicialização.
+- Polling reduz complexidade, com pequeno atraso e leituras periódicas. Busca textual simples e comparação pelo modelo evitam infraestrutura vetorial, mas limitam a relevância em bases maiores.
+- Inferências de intenção e similaridade dependem do modelo; validação, propriedade, prioridade e escrita são determinísticas. Testes simulados cobrem regras e cenários, não garantem todas as respostas de um provedor real.
+
+Com mais tempo: SSO corporativo, serviço legado real, PostgreSQL/Redis para escala, atualização via eventos, observabilidade de tokens/latência, avaliações contínuas com relatos reais anonimizados, busca melhor na central de ajuda, testes de acessibilidade e calendário de feriados.
