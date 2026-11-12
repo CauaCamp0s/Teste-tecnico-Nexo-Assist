@@ -45,6 +45,7 @@ export type EmployeeTicket = TicketSla & {
   createdAt: Date;
   lastUpdatedAt: Date | null;
   resolvedAt: Date | null;
+  transferSummary: string | null;
 };
 
 export type TicketListOptions = {
@@ -57,6 +58,12 @@ export type TicketContent = Pick<
 >;
 
 export interface TicketService {
+  transfer(
+    employeeId: string,
+    number: string,
+    summary: string,
+    idempotencyKey: string,
+  ): Promise<EmployeeTicket>;
   findDuplicateCandidates(employeeId: string): Promise<EmployeeTicket[]>;
   list(
     employeeId: string,

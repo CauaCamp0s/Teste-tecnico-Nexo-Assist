@@ -63,6 +63,13 @@ enum TicketImpact {
 }
 
 enum TicketOperationKind {
+  TRANSFER
+  CREATE
+  UPDATE
+  REOPEN
+}
+
+enum TicketDraftKind {
   CREATE
   UPDATE
   REOPEN
@@ -152,6 +159,7 @@ model Ticket {
   createdAt       DateTime          @default(now())
   lastUpdatedAt   DateTime?
   resolvedAt      DateTime?
+  transferSummary String?
   operations      TicketOperation[]
   targetDrafts    TicketDraft[]     @relation("DraftTarget")
   confirmedDrafts TicketDraft[]     @relation("DraftResult")
@@ -180,26 +188,26 @@ model TicketOperation {
 }
 
 model TicketDraft {
-  id             String              @id @default(cuid())
+  id             String            @id @default(cuid())
   employeeId     String
-  employee       User                @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employee       User              @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   conversationId String
-  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Restrict)
-  kind           TicketOperationKind
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  kind           TicketDraftKind
   targetTicketId String?
-  targetTicket   Ticket?             @relation("DraftTarget", fields: [targetTicketId], references: [id], onDelete: Restrict)
+  targetTicket   Ticket?           @relation("DraftTarget", fields: [targetTicketId], references: [id], onDelete: Restrict)
   resultTicketId String?
-  resultTicket   Ticket?             @relation("DraftResult", fields: [resultTicketId], references: [id], onDelete: Restrict)
+  resultTicket   Ticket?           @relation("DraftResult", fields: [resultTicketId], references: [id], onDelete: Restrict)
   title          String
   description    String
   type           TicketType
   category       TicketCategory
   priority       TicketPriority
   impact         TicketImpact
-  status         TicketDraftStatus   @default(PENDING)
+  status         TicketDraftStatus @default(PENDING)
   failureCode    String?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([employeeId, conversationId, status])
 }

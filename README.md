@@ -1,5 +1,13 @@
 # Nexo Assist
 
+### Transferência e disponibilidade do legado
+
+`transfer(employeeId, number, summary, idempotencyKey)` encaminha um chamado próprio ativo para `WAITING_FOR_ANALYST`, persiste `transferSummary` e reinicia `lastUpdatedAt`. A chave persistida impede repetir a escrita após perda de resposta.
+
+`TICKET_SERVICE_OUTAGE_MS=0` desliga a simulação. Um inteiro positivo (por exemplo, `3000`) provoca uma única janela de indisponibilidade desde a primeira chamada do legado por processo; consultas e confirmações compartilham essa janela. Após o prazo, o serviço se recupera, sem reiniciar a janela a cada chamada. Reiniciar o processo reinicia a simulação.
+
+Todas as operações do ponto de entrada público têm três tentativas totais, com esperas de 500 ms e 1000 ms, somente para `TicketUnavailableError` (`code: UNAVAILABLE`). Ao esgotar, o erro mantém `attempts` e `mayHaveCommitted`: este último sinaliza possível escrita sem resposta, não confirmação de sucesso. Na confirmação de rascunhos, a transação externa ainda desfaz as escritas em caso de falha. Relógio, espera e falhas antes/depois da operação são injetáveis nos testes.
+
 Agente de atendimento para o service desk de TI da Nexo.
 
 ## Desenvolvimento local

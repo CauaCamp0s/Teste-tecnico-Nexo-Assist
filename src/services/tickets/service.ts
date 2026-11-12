@@ -21,6 +21,7 @@ function toEmployeeTicket(ticket: Ticket, now: Date): EmployeeTicket {
     createdAt: ticket.createdAt,
     lastUpdatedAt: ticket.lastUpdatedAt,
     resolvedAt: ticket.resolvedAt,
+    transferSummary: ticket.transferSummary,
     ...getTicketSla(ticket, now),
   };
 }
@@ -79,6 +80,50 @@ export function createTicketService(
     return toEmployeeTicket(result, now);
   }
   return {
+    async transfer(employeeId, number, summary, idempotencyKey) {
+      requireEmployeeId(employeeId);
+      if (
+        typeof summary !== "string" ||
+        !summary.trim() ||
+        summary.trim().length > 10_000 ||
+        typeof number !== "string" ||
+        !number.trim()
+      ) {
+        throw new TicketError(
+          "INVALID_INPUT",
+          "Informe o chamado e um resumo de até 10000 caracteres.",
+        );
+      }
+      const target = number.trim().toUpperCase();
+      const transferSummary = summary.trim();
+      const now = clock();
+      const result = await writeTicket(
+        database,
+        employeeId,
+        idempotencyKey,
+        "TRANSFER",
+        { number: target, transferSummary },
+        now,
+        async (tx) => {
+          const ticket = await ownedTicket(tx, employeeId, target);
+          if (["RESOLVED", "CLOSED"].includes(ticket.status))
+            throw new TicketError(
+              "INVALID_STATE",
+              "Somente chamados ativos podem ser transferidos.",
+            );
+          await tx.ticket.updateMany({
+            where: { id: ticket.id, employeeId },
+            data: {
+              status: "WAITING_FOR_ANALYST",
+              transferSummary,
+              lastUpdatedAt: now,
+            },
+          });
+          return ownedTicket(tx, employeeId, target);
+        },
+      );
+      return toEmployeeTicket(result, now);
+    },
     async findDuplicateCandidates(employeeId) {
       requireEmployeeId(employeeId);
       const now = clock();
