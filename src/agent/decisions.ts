@@ -12,6 +12,22 @@ export const assessmentSchema = z.object({
 
 export const answerSchema = assessmentSchema.extend({
   answer: z.string().min(1),
+  consultationPlan: z
+    .array(
+      z.object({
+        tool: z.enum([
+          "search_help_center",
+          "list_tickets",
+          "get_ticket",
+          "find_duplicate_candidates",
+        ]),
+        query: z.string().optional(),
+        subject: z.string().optional(),
+        number: z.string().optional(),
+      }),
+    )
+    .max(2)
+    .optional(),
   helpOutcome: z
     .enum(["question", "guidance", "ticket_required", "not_applicable"])
     .optional(),

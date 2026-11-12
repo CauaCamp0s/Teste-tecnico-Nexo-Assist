@@ -33,19 +33,10 @@ function text(object: unknown) {
 }
 
 function tool(query: string) {
-  return {
-    content: [
-      {
-        type: "tool-call" as const,
-        toolCallId: "search-1",
-        toolName: "search_help_center",
-        input: JSON.stringify({ query }),
-      },
-    ],
-    finishReason: "tool-calls" as const,
-    usage,
-    warnings: [],
-  };
+  return text({
+    ...assessment,
+    consultationPlan: [{ tool: "search_help_center", query }],
+  });
 }
 
 function modelFor(query: string, confidence = "alta") {
@@ -136,7 +127,7 @@ test("registra a busca real como consulta, sem atribuir ações de alteração d
   expect(JSON.stringify(record)).not.toContain("invented");
   expect(JSON.stringify(record)).not.toContain("criou chamado");
   expect(model.doGenerateCalls).toHaveLength(2);
-  expect(model.doGenerateCalls[0].responseFormat?.type).not.toBe("json");
+  expect(model.doGenerateCalls[0].responseFormat?.type).toBe("json");
   expect(model.doGenerateCalls[1].responseFormat?.type).toBe("json");
   expect(model.doGenerateCalls[1].tools ?? []).toEqual([]);
   expect(model.doGenerateCalls[1].toolChoice).toEqual({ type: "none" });
@@ -203,7 +194,7 @@ test.each(["rh", "financeiro", "facilities"])(
     expect(record.executedActions).toEqual([]);
     expect(searchSpy).not.toHaveBeenCalled();
     expect(model.doGenerateCalls).toHaveLength(1);
-    expect(model.doGenerateCalls[0].toolChoice).toEqual({ type: "auto" });
+    expect(model.doGenerateCalls[0].toolChoice).toEqual({ type: "none" });
     expect(message.content).toContain("Esse assunto deve ser tratado");
   },
 );

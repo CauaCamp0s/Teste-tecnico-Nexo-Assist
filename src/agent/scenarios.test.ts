@@ -37,19 +37,11 @@ const text = (object: unknown) => ({
   usage,
   warnings: [],
 });
-const tool = (name: string, input: unknown) => ({
-  content: [
-    {
-      type: "tool-call" as const,
-      toolCallId: "call",
-      toolName: name,
-      input: JSON.stringify(input),
-    },
-  ],
-  finishReason: "tool-calls" as const,
-  usage,
-  warnings: [],
-});
+const tool = (name: string, input: unknown) =>
+  text({
+    ...assessment,
+    consultationPlan: [{ tool: name, ...(input as object) }],
+  });
 
 beforeAll(async () => {
   f = await createTicketFixture();
@@ -400,6 +392,23 @@ test("fora de escopo é redirecionado, mesmo com sugestão indevida de rascunho"
   expect(result.message.content).toContain("RH");
   expect(await f.db.ticketDraft.count()).toBe(0);
 });
+
+test.each(["rh", "financeiro", "facilities"])(
+  "escopo %s impede consultas propostas antes de executar qualquer busca",
+  async (intent) => {
+    const help = await import("@/services/help-center");
+    const search = vi.spyOn(help, "searchHelpCenter");
+    const result = await turn("Como faço para pedir férias?", {
+      ...assessment,
+      understanding: { intent, summary: "Pedido administrativo" },
+      consultationPlan: [{ tool: "search_help_center", query: "pedir férias" }],
+    });
+    expect(search).not.toHaveBeenCalled();
+    expect(result.record.consultations).toEqual([]);
+    expect(result.record.decision).toBe("redirecionar");
+    expect(result.model.doGenerateCalls).toHaveLength(1);
+  },
+);
 
 test("indisponibilidade do legado não vira confirmação falsa", async () => {
   vi.spyOn(services.ticketService, "list").mockRejectedValue(

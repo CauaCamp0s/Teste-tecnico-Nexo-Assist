@@ -176,6 +176,7 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
+      "Primeiro classifique a intenção e proponha consultas em consultationPlan (no máximo duas). Não chame ferramentas diretamente. Cada entrada tem tool e query para search_help_center, subject opcional para list_tickets, number para get_ticket; find_duplicate_candidates não precisa de campos adicionais. Fora de TI, consultationPlan deve ser vazio. O servidor valida o escopo ANTES de executar qualquer consulta. Após receber resultados, responda sem planejar novas consultas. " +
       "Preencha helpOutcome: question quando faltar condição do artigo, guidance ao orientar, ticket_required somente quando a condição do artigo exige chamado, not_applicable se o artigo não se aplica. Não marque ticket_required apenas porque houve uma falha de equipamento. " +
       "Priorize resolução sem fila. Para um problema de TI, consulte a central antes de iniciar coleta de chamado. Com artigo relevante, oriente primeiro e respeite suas condições: VPN 809 exige perguntar Windows 10 ou 11; no 10 oriente os passos, no 11 o artigo exige chamado. proposal=null enquanto faltar condição do artigo ou houver orientação aplicável ainda não tentada. Só inicie coleta quando houver pedido explícito de chamado, orientação sem resultado ou artigo inaplicável/exigindo chamado. " +
       "Ao consultar sem número, use list_tickets com subject contendo o assunto específico (ex.: 'meu chamado do notebook' => subject 'notebook'). Sem assunto, omita subject. A lista padrão contém só ativos; obtenha chamados resolvidos pelo número com get_ticket. " +
@@ -263,17 +264,11 @@ export async function respondToConversation(
           if (attempt > 0) return (await generateAnswer(true)).object;
           const initial = await runModel("initial", () =>
             agent.generate(history, {
-              activeTools: [
-                "search_help_center",
-                "list_tickets",
-                "get_ticket",
-                "find_duplicate_candidates",
-              ],
-              toolChoice: "auto",
+              activeTools: [],
+              toolChoice: "none",
               maxSteps: 1,
               structuredOutput: {
                 schema: answerSchema,
-                jsonPromptInjection: true,
                 errorStrategy: "warn",
               },
               abortSignal,
@@ -282,6 +277,34 @@ export async function respondToConversation(
             }),
           );
           const provisional = answerSchema.safeParse(initial.object);
+          if (
+            !provisional.success ||
+            provisional.data.understanding.intent !== "ti"
+          )
+            return initial.object;
+          for (const planned of provisional.data.consultationPlan ?? []) {
+            switch (planned.tool) {
+              case "search_help_center":
+                if (planned.query?.trim())
+                  await search.execute!({ query: planned.query }, {} as never);
+                break;
+              case "list_tickets":
+                await ticketTools.tools.list_tickets.execute!(
+                  { subject: planned.subject },
+                  {} as never,
+                );
+                break;
+              case "get_ticket":
+                if (planned.number)
+                  await ticketTools.tools.get_ticket.execute!(
+                    { number: planned.number },
+                    {} as never,
+                  );
+                break;
+              case "find_duplicate_candidates":
+                await draftFlow.tool.execute!({}, {} as never);
+            }
+          }
           const emergency =
             provisional.success &&
             provisional.data.proposal?.interruption === "stopped" &&
