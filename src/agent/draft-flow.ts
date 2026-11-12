@@ -65,21 +65,6 @@ export function createDraftFlow(
     }),
     async prepare(proposal: TicketProposal, record: DecisionRecord) {
       const fields = [
-        ["title", "Qual título resume o problema?", []],
-        ["description", "O que está acontecendo e desde quando?", []],
-        [
-          "type",
-          "Algo deixou de funcionar ou é um novo pedido?",
-          [
-            "Algo deixou de funcionar",
-            "Novo pedido de acesso, equipamento ou software",
-          ],
-        ],
-        [
-          "category",
-          "A qual área de TI isso se refere?",
-          ["Acesso", "Rede e VPN", "Hardware", "Software", "E-mail", "Outros"],
-        ],
         [
           "impact",
           "Quem está sendo afetado?",
@@ -99,8 +84,33 @@ export function createDraftFlow(
           "Há algum compromisso em risco ainda hoje?",
           ["Sim, tenho compromisso hoje", "Não há compromisso hoje"],
         ],
+        ["description", "O que está acontecendo e desde quando?", []],
+        ["title", "Qual problema você quer registrar?", []],
+        [
+          "type",
+          "Algo deixou de funcionar ou é um novo pedido?",
+          [
+            "Algo deixou de funcionar",
+            "Novo pedido de acesso, equipamento ou software",
+          ],
+        ],
+        [
+          "category",
+          "A qual área de TI isso se refere?",
+          ["Acesso", "Rede e VPN", "Hardware", "Software", "E-mail", "Outros"],
+        ],
       ] as const;
       for (const [field, question, options] of fields) {
+        if (
+          field === "sameDayCommitment" &&
+          proposal.interruption === "stopped" &&
+          proposal.sameDayCommitment === null
+        ) {
+          record.appliedRules.push(
+            "Compromisso no mesmo dia não perguntado: interrupção total já determina prioridade alta ou crítica.",
+          );
+          continue;
+        }
         if (proposal[field] === null || proposal[field] === "") {
           record.decision = "pedir_detalhes";
           record.appliedRules.push(
@@ -117,11 +127,11 @@ export function createDraftFlow(
       const context = {
         impact: proposal.impact!,
         interruption: proposal.interruption!,
-        sameDayCommitment: proposal.sameDayCommitment!,
+        sameDayCommitment: proposal.sameDayCommitment ?? false,
       };
       const classification = classifyTicketPriority(context);
       record.appliedRules.push(
-        `Prioridade ${classification.priority}: ${classification.reason} Contexto: ${context.impact}, ${context.interruption}, compromisso hoje: ${context.sameDayCommitment ? "sim" : "não"}.`,
+        `Prioridade ${classification.priority}: ${classification.reason} Contexto: ${context.impact}, ${context.interruption}, compromisso hoje: ${proposal.sameDayCommitment === null ? "não necessário para classificação" : context.sameDayCommitment ? "sim" : "não"}.`,
       );
       const compared = candidates !== undefined;
       if (!compared && !unavailable) await lookup();

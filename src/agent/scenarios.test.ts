@@ -157,7 +157,7 @@ test("consulta sem número pede seleção; selecionado vencido oferece transfer�
   expect(await f.db.ticketOperation.count()).toBe(1);
 });
 
-test("abertura em três mensagens até confirmação, sem prioridade livre do modelo", async () => {
+test("abertura com uma pergunta até confirmação, sem urgência redundante nem prioridade livre", async () => {
   const first = await turn(
     "VPN erro 809 no Windows 11 desde ontem. Quero chamado.",
     {
@@ -171,37 +171,35 @@ test("abertura em três mensagens até confirmação, sem prioridade livre do mo
     },
   );
   expect(first.message.content).toBe("Quem está sendo afetado?");
-  const second = await turn("Só eu, não consigo trabalhar.", {
-    ...assessment,
-    proposal: { ...complete, sameDayCommitment: null },
-  });
-  expect(second.message.content).toContain("compromisso");
-  const third = await turn(
-    "Tenho reunião hoje; problema diferente dos meus chamados anteriores.",
-    { ...assessment, proposal: { ...complete, priority: "LOW" } },
+  const second = await turn(
+    "Só eu, não consigo trabalhar. É outro problema.",
+    {
+      ...assessment,
+      proposal: { ...complete, sameDayCommitment: null, priority: "LOW" },
+    },
     { name: "find_duplicate_candidates", input: {} },
   );
-  expect(third.payload.draft).toMatchObject({
+  expect(second.payload.draft).toMatchObject({
     kind: "CREATE",
     priority: "HIGH",
     status: "PENDING",
   });
-  expect(third.record.appliedRules.join(" ")).toContain(
-    "compromisso hoje: sim",
+  expect(second.record.appliedRules.join(" ")).toContain(
+    "Compromisso no mesmo dia não perguntado",
   );
   expect(await f.db.ticket.count()).toBe(9);
   const act = createChatDraftService(f.db);
   const confirmed = await act(
     f.ana,
     f.conversationId,
-    third.payload.draft!.id,
+    second.payload.draft!.id,
     "confirm",
   );
   expect(confirmed.content).toContain("Criou o chamado INC-100001");
-  await act(f.ana, f.conversationId, third.payload.draft!.id, "confirm");
+  await act(f.ana, f.conversationId, second.payload.draft!.id, "confirm");
   expect(await f.db.ticket.count()).toBe(10);
   const savedCard = await f.db.message.findUniqueOrThrow({
-    where: { id: third.message.id },
+    where: { id: second.message.id },
   });
   expect((savedCard.payload as ChatPayload).draft?.status).toBe("CONFIRMED");
 });

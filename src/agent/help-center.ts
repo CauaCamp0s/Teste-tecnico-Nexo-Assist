@@ -131,6 +131,7 @@ export async function respondToConversation(
     maxRetries: 0,
     errorProcessorDefaults: false,
     instructions:
+      "Reduza perguntas: gere um título conciso e infira tipo/categoria pelo relato. Exemplo: 'meu monitor não liga' => título 'Monitor não liga', INC, HARDWARE. Não pergunte título, tipo ou categoria quando inferíveis; null só para relato vago. Priorize esclarecer impacto e interrupção, uma pergunta objetiva por vez. Com interruption=stopped, compromisso no mesmo dia não muda alta/crítica: deixe null se não informado, sem perguntar. " +
       "Não deduza quem é afetado só por 'meu notebook': se o funcionário não informou se é só ele/equipe/empresa, impact=null. Interrupção e compromisso no mesmo dia também precisam de evidência explícita no relato, senão null. " +
       "Para qualquer pane coletiva ou interrupção total relatada, extraia proposal com o contexto de impacto/interrupção, mesmo com outros campos null, para o código avaliar criticidade. Se o usuário só disser olá, não é insegurança: peça o problema com confiança média. " +
       "Quando o funcionário pedir pessoa/analista ou aceitar oferta de transferência, handoff.requested=true e relatedNumber se houver chamado relacionado; recusa de oferta não é pedido. Nunca diga que transferiu/criou/atualizou/reabriu: o servidor executa e redige essas confirmações. Caso você não tenha segurança sobre como proceder, confidence=baixa para encaminhamento humano. " +
