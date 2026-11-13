@@ -4,6 +4,20 @@ Service desk de TI com assistente virtual, chamados simulados e atendimento huma
 
 Demonstração: https://app-production-48425a24.up.railway.app (funcionário `ana.souza@nexo.com.br`, analista `rafael.lima@nexo.com.br`, qualquer senha).
 
+## Roteiro rápido de avaliação
+
+Entre como `ana.souza@nexo.com.br` e abra "Registro de decisões" abaixo de cada resposta para ver o que o agent consultou, decidiu e executou, com segurança e motivo.
+
+1. **Dúvida resolvida pela central:** "Minha VPN está dando erro 809". O agent consulta o artigo e pergunta a versão do Windows; no Windows 10 orienta com os passos, no Windows 11 segue para chamado.
+2. **Sem duplicidade:** responda "Windows 11". A Ana já tem `INC-20312` aberto sobre VPN, então o agent propõe complementar esse chamado em vez de criar outro.
+3. **Consulta sem número e prazo vencido:** "Qual o status do meu chamado?". Escolha `INC-20311` no seletor: o agent informa o atraso e oferece um analista.
+4. **Transferência:** clique em "Falar com um analista". O agent pausa e a conversa entra na fila com um resumo.
+5. **Console do analista:** saia e entre como `rafael.lima@nexo.com.br`. Assuma a conversa da Ana, responda e devolva ao agent ou encerre.
+6. **Abertura de chamado:** entre como `bruno.tavares@nexo.com.br` e escreva "Meu monitor não liga, já troquei o cabo". O agent pergunta só o que falta, calcula a prioridade e o prazo e mostra o rascunho para confirmação.
+7. **Fora de escopo:** "Como peço férias?" é redirecionado ao RH.
+
+O banco da demonstração é persistente e compartilhado. Se alguém já tiver percorrido o roteiro, os chamados podem estar em outro estado; localmente, `npm run setup` com um banco novo reproduz o cenário inicial.
+
 ## Executar localmente
 
 Requisitos: Node.js >=22.13 e npm. Copie `.env.example` para `.env` e preencha `GOOGLE_GENERATIVE_AI_API_KEY` com uma chave do Google AI Studio.
@@ -82,22 +96,13 @@ Stack: Next.js 16, React 19, TypeScript estrito, Prisma 6/SQLite, Mastra 1.82, Z
 
 ## Como o agent decide
 
-Refinamentos após validação no navegador:
-
-- O modelo primeiro classifica e propõe consultas estruturadas; o servidor bloqueia consultas fora de TI antes de executá-las. A segunda chamada recebe os resultados reais.
-- A central de ajuda precede a coleta quando há orientação aplicável. VPN 809 pergunta Windows 10/11: Windows 10 recebe os passos; Windows 11 segue para chamado conforme o artigo. A regra de segurança por ausência de artigo se limita à orientação pela central, não a operações de chamados.
-- Opções de duplicidade oferecidas usam a proposta persistida e são interpretadas pelo código, sem chamar o modelo novamente. O alvo continua sujeito a propriedade, estado e janela de reabertura.
-- Seletores compactos e opções rápidas enviam imediatamente. O vencimento informa tempo sem atualização e prazo da prioridade. O resumo humano usa seções curtas e rótulos legíveis.
-- Números continuam o maior sufixo numérico por tipo, com reserva atômica na transação. No seed atual, os próximos são `INC-20316` e `REQ-10445`; números já emitidos são preservados.
-- Filtros do console mostram contagens reais de todos os status, independentemente do filtro selecionado, atualizadas no polling.
-
 **O modelo interpreta e propõe; o código executa e impõe as regras.**
 
 1. A mensagem do funcionário é persistida antes de chamar o modelo. As ferramentas recebem `employeeId` pelo closure criado com a sessão autenticada; o modelo não escolhe o proprietário.
-2. O modelo identifica a intenção e consulta artigos ou chamados. `list_tickets` lista ativos por padrão e aceita assunto, pesquisado no título/descrição pelo serviço. Um resultado é exibido diretamente; dois ou mais pedem seleção. Toda consulta filtra o proprietário no banco.
+2. O modelo identifica a intenção e consulta artigos ou chamados. Quando há artigo aplicável, o agent orienta antes de abrir chamado e respeita as condições do artigo (por exemplo, Windows 10 ou 11). Assuntos fora de TI são redirecionados sem consulta. `list_tickets` lista ativos por padrão e aceita assunto, pesquisado no título/descrição pelo serviço. Um resultado é exibido diretamente; dois ou mais pedem seleção. Toda consulta filtra o proprietário no banco.
 3. Para abertura, o modelo infere título, tipo e categoria quando possível. O código prioriza lacunas de impacto e interrupção, uma pergunta por vez. Não pergunta compromisso hoje quando interrupção total já define alta/crítica.
 4. A prioridade é calculada no servidor: paralisação de equipe/empresa é crítica; paralisação individual ou compromisso hoje é alta; trabalho prejudicado com alternativa é média; pedido sem urgência é baixa. O modelo não determina livremente a prioridade.
-5. Antes da escrita, candidatos próprios são consultados. Correspondência ativa gera proposta de complemento; resolvido elegível gera proposta de reabertura. Incerteza pede esclarecimento. Referência resolvida fora da janela não cria silenciosamente outro chamado.
+5. Antes da escrita, candidatos próprios são consultados. Correspondência ativa gera proposta de complemento; resolvido elegível gera proposta de reabertura. Incerteza pede esclarecimento, mostrando só candidatos plausíveis; a resposta às opções de duplicidade é interpretada pelo código. Um complemento só vale para chamado estabelecido na conversa (criado, atualizado, selecionado ou citado pelo funcionário). Referência resolvida fora da janela não cria silenciosamente outro chamado.
 6. O funcionário confere o rascunho e confirma ou cancela. Essas ações não usam modelo. A confirmação revalida alvo, estado e propriedade, e grava alteração, chave de idempotência, resultado e histórico em transação. Repetir a confirmação devolve o mesmo resultado. Editar prepara outro rascunho e cancela o anterior.
 
 Cada resposta registra entendimento, consultas e resultados, decisão, ações efetivamente persistidas, regras, segurança e motivo. A interface mostra títulos, números públicos e datas em pt-BR/São Paulo; o JSON técnico permanece no banco. Consultas não aparecem como alterações, e alegações de escrita no texto livre são substituídas por mensagens controladas pelo código.
@@ -137,9 +142,9 @@ npm test
 npm run build
 ```
 
-A suíte atual tem 223 testes em 29 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
+A suíte atual tem 239 testes em 30 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
 
-As Telas 1–5 também foram verificadas em navegador desktop/celular, incluindo assumir/responder e entrega por atualização periódica, com banco temporário. Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
+Os fluxos das Telas 1–5 também foram verificados no navegador, localmente e no deploy, com o modelo real e banco novo, incluindo abertura, consulta, duplicidade, complemento, transferência e ações do analista. Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
 
 ## Interpretações e trade-offs
 
