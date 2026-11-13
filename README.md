@@ -118,7 +118,7 @@ Cada resposta registra entendimento, consultas e resultados, decisão, ações e
 
 ## Modelo, custo e disponibilidade
 
-Foi mantido `google/gemini-3.5-flash-lite`, visando baixa latência e custo para o fluxo de atendimento. O uso de cota gratuita depende da disponibilidade e dos limites do projeto Google. Não há preço fixo por mensagem: o custo depende dos tokens de entrada/saída e da tabela do provedor.
+Escolhi o Gemini Flash-Lite (`google/gemini-3.5-flash-lite`) porque o atendimento precisa de respostas rápidas e baratas, com chamada de ferramentas e saída estruturada confiáveis. As decisões que exigem rigor (prioridade, prazo, duplicidade, permissões e escrita) ficam no código, então um modelo pequeno basta para interpretar e redigir. Nas validações reais, as respostas levaram em torno de 2 a 4 segundos. O provedor é trocável pela variável `LLM_MODEL`, sem mudar o código. O uso de cota gratuita depende da disponibilidade e dos limites do projeto Google. Não há preço fixo por mensagem: o custo depende dos tokens de entrada/saída e da tabela do provedor.
 
 O fluxo normal usa uma chamada para interpretar/consultar e, havendo consulta, outra para responder com os resultados: aproximadamente duas chamadas por mensagem. Respostas diretas podem usar uma; confirmar/cancelar e ações do analista usam zero. O histórico aumenta o consumo de entrada. Usa-se `thinkingLevel: minimal`; trocar `LLM_MODEL` exige um modelo compatível com essa opção e com a saída estruturada.
 
@@ -132,7 +132,14 @@ Defina `TICKET_SERVICE_OUTAGE_MS=3000` e reinicie a aplicação. A primeira cham
 
 O ponto de entrada público tenta até três vezes, com esperas de 500 e 1000 ms, apenas para indisponibilidade. Falha de confirmação mantém o rascunho `PENDING`, permitindo nova tentativa; erro definitivo marca `FAILED`. Escritas usam chave de idempotência e transação para evitar duplicação após perda de resposta. Se a transferência do chamado falhar, a conversa ainda pode entrar na fila, com aviso de que o chamado não foi alterado. No console, a falha do painel de chamados preserva histórico e controles.
 
-## Qualidade e verificações
+## Como garanti a qualidade das decisões
+
+1. **Regras no servidor, não no prompt.** Identidade, permissões, prioridade, prazo, duplicidade, reabertura e escrita são determinísticas e testadas. O modelo não consegue criar ou alterar um chamado sem a confirmação do funcionário, nem ver chamados de outra pessoa.
+2. **Testes de cenário do agent.** Conversas completas rodam com o modelo simulado, verificando a decisão tomada, as consultas registradas e as ações executadas em cada passo.
+3. **Validação com o modelo real.** Os fluxos foram percorridos no navegador, localmente e no deploy, com banco novo. Essa etapa encontrou problemas que os testes simulados não pegavam (como um loop na pergunta de duplicidade e um complemento apontando para o chamado errado), e cada um virou correção com teste de regressão.
+4. **Transparência auditável.** O registro de decisões mostra o que foi consultado e executado a partir do que o código de fato fez; alegações de alteração no texto livre do modelo são bloqueadas.
+
+Verificações:
 
 ```sh
 npm run lint
@@ -144,7 +151,7 @@ npm run build
 
 A suíte atual tem 239 testes em 30 arquivos. `src/agent/scenarios.test.ts` percorre orientação, consulta/seleção, vencimento/aceite, coleta, confirmação, duplicidade, reabertura, criticidade, escopo, falhas e isolamento com modelo simulado e rede bloqueada. Outros testes verificam prioridade/SLA, sessão/papel, concorrência, limites, rollback, idempotência e recuperação. As regras ficam no servidor, não apenas no prompt ou nos botões.
 
-Os fluxos das Telas 1–5 também foram verificados no navegador, localmente e no deploy, com o modelo real e banco novo, incluindo abertura, consulta, duplicidade, complemento, transferência e ações do analista. Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
+Rodadas reais de modelo são manuais e curtas; suas saídas e credenciais não fazem parte do repositório.
 
 ## Interpretações e trade-offs
 
@@ -156,4 +163,12 @@ Os fluxos das Telas 1–5 também foram verificados no navegador, localmente e n
 - Polling reduz complexidade, com pequeno atraso e leituras periódicas. Busca textual simples e comparação pelo modelo evitam infraestrutura vetorial, mas limitam a relevância em bases maiores.
 - Inferências de intenção e similaridade dependem do modelo; validação, propriedade, prioridade e escrita são determinísticas. Testes simulados cobrem regras e cenários, não garantem todas as respostas de um provedor real.
 
-Com mais tempo: SSO corporativo, serviço legado real, PostgreSQL/Redis para escala, atualização via eventos, observabilidade de tokens/latência, avaliações contínuas com relatos reais anonimizados, busca melhor na central de ajuda, testes de acessibilidade e calendário de feriados.
+## O que faria com mais tempo
+
+- Avaliações automáticas do agent com o modelo real, a partir de relatos anonimizados, para medir a qualidade das decisões a cada mudança de prompt ou de modelo.
+- Streaming das respostas e atualização por eventos no lugar do polling.
+- Busca semântica na central de ajuda.
+- PostgreSQL e limite de requisições distribuído para rodar com várias instâncias.
+- Observabilidade de tokens, custo e latência por conversa.
+- SSO corporativo, integração com o sistema legado real e calendário de feriados no cálculo de prazo.
+- Testes de acessibilidade e de ponta a ponta da interface.
