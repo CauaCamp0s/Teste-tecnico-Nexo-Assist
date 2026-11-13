@@ -534,8 +534,7 @@ export async function respondToConversation(
       });
       if (!updated.count)
         throw new Error("A conversa não está mais com o agent.");
-      if (prepared && "persist" in prepared && prepared.persist)
-        payload = await prepared.persist(tx);
+      if (prepared?.persist) payload = await prepared.persist(tx);
       if (shouldTransfer) {
         content = await handoffConversation(
           tx,

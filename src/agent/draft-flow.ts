@@ -11,6 +11,12 @@ import { ticketCard, type ChatPayload } from "@/services/chat-payload";
 import type { Consultation, DecisionRecord } from "./decisions";
 import type { TicketProposal } from "./proposal";
 
+export type PreparedDraft = {
+  content: string;
+  payload: ChatPayload;
+  persist?: (tx: Prisma.TransactionClient) => Promise<ChatPayload>;
+};
+
 export function createDraftFlow(
   employeeId: string,
   conversationId: string,
@@ -105,7 +111,7 @@ export function createDraftFlow(
       proposal: TicketProposal,
       record: DecisionRecord,
       selected = false,
-    ) {
+    ): Promise<PreparedDraft> {
       if (
         proposal.duplicate?.relation === "same" &&
         proposal.duplicate.number &&
