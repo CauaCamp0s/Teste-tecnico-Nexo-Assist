@@ -2,6 +2,8 @@
 
 Service desk de TI com assistente virtual, chamados simulados e atendimento humano. Implementa as Telas 1–5 do protótipo: identificação, chat e console do analista, com layout responsivo e histórico persistido.
 
+Demonstração: https://app-production-48425a24.up.railway.app (funcionário `ana.souza@nexo.com.br`, analista `rafael.lima@nexo.com.br`, qualquer senha).
+
 ## Executar localmente
 
 Requisitos: Node.js >=22.13 e npm. Copie `.env.example` para `.env` e preencha `GOOGLE_GENERATIVE_AI_API_KEY` com uma chave do Google AI Studio.
@@ -35,7 +37,6 @@ Configure as variáveis de `.env.example` no ambiente, prepare um volume graváv
 
 ```sh
 npm ci --include=dev
-npm run db:generate
 npm run build
 npm start
 ```
@@ -53,7 +54,11 @@ npm start
 | `TRUST_PROXY`                  | `true` habilita limite adicional por `x-forwarded-for` confiável |
 | `PORT`                         | Porta HTTP, padrão `3000`                                        |
 
-O limite é aplicado antes da geração, inclui novas tentativas e preserva a mensagem já salva. Usa contadores por sessão e, com `TRUST_PROXY=true`, por IP. Habilite essa opção somente atrás de proxy que sobrescreva `x-forwarded-for` e impeça acesso direto à aplicação. Sem proxy confiável, o Next não fornece IP direto nas server actions e o limite fica por sessão. Os contadores são locais ao processo, expiram e reiniciam com ele; não substituem proteção distribuída. Esta entrega prepara a execução, sem realizar deploy.
+O limite é aplicado antes da geração, inclui novas tentativas e preserva a mensagem já salva. Usa contadores por sessão e, com `TRUST_PROXY=true`, por IP. Habilite essa opção somente atrás de proxy que sobrescreva `x-forwarded-for` e impeça acesso direto à aplicação. Sem proxy confiável, o Next não fornece IP direto nas server actions e o limite fica por sessão. Os contadores são locais ao processo, expiram e reiniciam com ele; não substituem proteção distribuída.
+
+### Deploy na Railway
+
+A demonstração roda na Railway, a partir da branch `main` deste repositório, com o builder padrão (Railpack). O banco SQLite fica em um volume montado em `/data` (`DATABASE_URL=file:/data/nexo.db`), então conversas, chamados e estados sobrevivem a novos deploys e reinícios. A chave do modelo existe apenas nas variáveis do serviço. `NPM_CONFIG_INCLUDE=dev` mantém Prisma CLI e tsx disponíveis para migração e seed no start, e `TRUST_PROXY=true` habilita o limite por IP atrás do proxy da Railway. Para conter custo, além do limite por sessão e IP, o projeto usa um modelo econômico e o limite de 30 mensagens por conversa; um teto de gastos também deve ser configurado no painel do provedor do modelo.
 
 ## Arquitetura
 
